@@ -24,11 +24,25 @@ logging.basicConfig(
     ]
 )
 
+# ----------------------------
 # Create Flask app
+# ----------------------------
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
 
+# # ✅ This makes your firebase service worker available at /firebase-messaging-sw.js
+# @app.route('/firebase-messaging-sw.js')
+# def service_worker():
+#     return send_from_directory('static', 'firebase-messaging-sw.js')
+
+# @app.route('/chrome-sw.js')
+# def chrome_service_worker():
+#     return send_from_directory('static', 'chrome-sw.js')
+
+
+# ----------------------------
 # Configure database with optimizations
+# ----------------------------
 database_url = os.environ.get("DATABASE_URL")
 if not database_url:
     # Fallback to SQLite for development/deployment without PostgreSQL
@@ -110,7 +124,9 @@ def init_db():
 
 init_db()
 
-# Constants
+# ----------------------------
+# Constant
+# ----------------------------
 SG_TZ = pytz.timezone("Asia/Singapore")
 WBGT_ZONES = {
     "white": {"work": 60, "rest": 15},
@@ -118,7 +134,7 @@ WBGT_ZONES = {
     "yellow": {"work": 30, "rest": 15},
     "red": {"work": 30, "rest": 30},
     "black": {"work": 15, "rest": 30},
-    "test": {"work": 7/60, "rest": 10/60},  # 7 seconds work, 10 seconds rest
+    "test": {"work": 30/60, "rest": 30/60},  # 30 seconds work, 30 seconds rest
     "cut-off": {"work": 0, "rest": 30}
 }
 
@@ -136,7 +152,9 @@ ZONE_STRINGENCY = {
 # Global system status for each conduct
 conduct_system_status = {}
 
+# ----------------------------
 # Simple cache for user data to reduce database queries
+# ----------------------------
 user_cache = {}
 CACHE_TIMEOUT = 30  # seconds
 
@@ -164,6 +182,9 @@ def invalidate_user_cache(user_id):
     if user_id in user_cache:
         del user_cache[user_id]
 
+# ----------------------------
+# Functions
+# ----------------------------
 def get_conduct_system_status(conduct_id):
     """Get system status for a specific conduct"""
     if conduct_id not in conduct_system_status:
@@ -200,6 +221,7 @@ def get_rest_duration_for_most_stringent_zone(most_stringent_zone):
     return WBGT_ZONES.get(most_stringent_zone, {}).get('rest', 15)
 
 def emit_user_update(conduct_id, user):
+    print("User pressed zone, update conducting table")
     """Emit user update to all clients in conduct room"""
     try:
         socketio.emit('user_update', {
@@ -210,9 +232,23 @@ def emit_user_update(conduct_id, user):
             'end_time': user.end_time,
             'work_completed': user.work_completed,
             'pending_rest': user.pending_rest,
-            'role': user.role
+            'role': user.role,
+            'remarks': user.remarks
         }, room=f'conduct_{conduct_id}')
         print(f"Emitted user update for {user.name} to conduct room {conduct_id}")
+    except Exception as e:
+        logging.error(f"Error emitting user update: {e}")
+        
+def emit_conducting_remarks(conduct_id, user):
+    print("Conducting remarks emitted to trainer")
+    """Emit remarks update to all clients in conduct room"""
+    try:
+        socketio.emit('conducting_remarks', {
+            'user': user.name,
+            'role': user.role,
+            'remarks': user.remarks
+        }, room=f'conduct_{conduct_id}')
+        print(f"Conducting remarks emitted to user for {user.name} to conduct room {conduct_id}")
     except Exception as e:
         logging.error(f"Error emitting user update: {e}")
 
@@ -327,18 +363,20 @@ def check_conduct_activity():
             ).all()
             
             for conduct in old_conducts:
-                # Check if any users have ever joined this conduct
-                user_count = User.query.filter_by(conduct_id=conduct.id).count()
+                # Check if there are any currently active users in this conduct
+                active_user_count = User.query.filter_by(conduct_id=conduct.id).filter(
+                    User.status.in_(['working', 'resting'])
+                ).count()
                 
-                if user_count == 0:
-                    # No users have joined this conduct in 24 hours - deactivate it
+                if active_user_count == 0:
+                    # No active users in this conduct for 24 hours - deactivate it
                     conduct.status = 'inactive'
-                    print(f"Conduct '{conduct.name}' (PIN: {conduct.pin}) automatically deactivated after 24 hours with no users")
+                    print(f"Conduct '{conduct.name}' (PIN: {conduct.pin}) automatically deactivated after 24 hours with no active users")
                     
                     # Log the deactivation activity if there's activity logging
                     try:
                         log_activity(conduct.id, "SYSTEM", 'conduct_deactivated', 
-                                   details=f"Conduct automatically deactivated after 24 hours with no users at {now.strftime('%Y-%m-%d %H:%M:%S')}")
+                                   details=f"Conduct automatically deactivated after 24 hours with no active users at {now.strftime('%Y-%m-%d %H:%M:%S')}")
                     except:
                         # If logging fails, continue with deactivation
                         pass
@@ -600,7 +638,7 @@ def index():
     return render_template('index_new.html')
 
 # New Battalion-Company Structure Routes
-
+# API to create new conduct 
 @app.route('/create_conduct_new', methods=['GET', 'POST'])
 def create_conduct_new():
     if request.method == 'POST':
@@ -663,6 +701,7 @@ def create_conduct_new():
 
     return render_template('create_conduct_new.html')
 
+# API for view conducts new combined with battalion overview
 @app.route('/view_conducts_new', methods=['GET', 'POST'])
 def view_conducts_new():
     if request.method == 'POST':
@@ -727,8 +766,7 @@ def view_conducts_new():
 
     return render_template('view_conducts_new.html')
 
-@app.route('/battalion_overview/<int:battalion_id>')
-def battalion_overview(battalion_id):
+
     try:
         battalion = Battalion.query.get_or_404(battalion_id)
         companies = Company.query.filter_by(battalion_id=battalion_id).order_by(Company.name).all()
@@ -750,6 +788,7 @@ def battalion_overview(battalion_id):
         flash(f'Error loading battalion overview: {str(e)}', 'error')
         return redirect(url_for('index'))
 
+# API to retrieve all company conduct via company ID
 @app.route('/company_conducts/<int:company_id>')
 def company_conducts(company_id):
     try:
@@ -763,6 +802,7 @@ def company_conducts(company_id):
         flash(f'Error loading company conducts: {str(e)}', 'error')
         return redirect(url_for('index'))
 
+# API to delete a list of conducts selected by user in a battalion
 @app.route('/delete_conducts/<int:battalion_id>', methods=['POST'])
 def delete_conducts(battalion_id):
     """Delete selected conducts - only accessible by battalion accounts"""
@@ -825,8 +865,7 @@ def delete_conducts(battalion_id):
         flash(f'Error deleting conducts: {str(e)}', 'error')
         return redirect(url_for('battalion_overview', battalion_id=battalion_id))
 
-@app.route('/create_conduct', methods=['GET', 'POST'])
-def create_conduct():
+
     """Page 2A: Create Conduct with Authentication"""
     if request.method == 'POST':
         unit_name = request.form.get('unit_name', '').strip()
@@ -872,8 +911,7 @@ def create_conduct():
 
     return render_template('create_conduct.html')
 
-@app.route('/view_conducts', methods=['GET', 'POST'])
-def view_conducts():
+
     """Page 2B: Authenticate to View Conduct List"""
     if request.method == 'POST':
         unit_name = request.form.get('unit_name', '').strip()
@@ -893,6 +931,7 @@ def view_conducts():
 
     return render_template('view_conducts.html')
 
+# API that retrieve all the conducts in the unit
 @app.route('/conduct_list/<int:unit_id>')
 def conduct_list(unit_id):
     """Page 3: Conduct List Dashboard"""
@@ -901,6 +940,7 @@ def conduct_list(unit_id):
 
     return render_template('conduct_list.html', unit=unit, conducts=conducts)
 
+# API to join conduct via 6 digit PIN
 @app.route('/join_conduct', methods=['GET', 'POST'])
 def join_conduct():
     """Page 4: Conduct Join Verification"""
@@ -935,6 +975,7 @@ def join_conduct():
 
     return render_template('join_conduct.html')
 
+# API to user setup -> page after join conduct, ask for name and join the conduct trainer/conducting
 @app.route('/user_setup/<int:conduct_id>', methods=['GET', 'POST'])
 def user_setup(conduct_id):
     """Page 5: Identity & Role Selection"""
@@ -1017,6 +1058,7 @@ def user_setup(conduct_id):
 
     return render_template('user_setup.html', conduct=conduct)
 
+# API to trainer dashboard
 @app.route('/dashboard/<int:user_id>')
 def dashboard(user_id):
     """Page 6: Trainer Interface"""
@@ -1047,6 +1089,7 @@ def dashboard(user_id):
                          zones=WBGT_ZONES,
                          system_status=system_status)
 
+# API to conducting body monitoring
 @app.route('/monitor/<int:user_id>')
 def monitor(user_id):
     """Page 7: Conducting Body Interface"""
@@ -1059,6 +1102,8 @@ def monitor(user_id):
 
     # Get all users in this conduct
     users = User.query.filter_by(conduct_id=user.conduct_id).all()
+    # get the conduct pin
+    conductPin = Conduct.query.filter_by(id=user.conduct_id).first().pin
 
     users_dict = {u.name: {
         'role': u.role,
@@ -1091,12 +1136,57 @@ def monitor(user_id):
                          user_id=user.id,
                          role=user.role,
                          conduct_id=user.conduct_id,
+                         conduct_pin=conductPin,
                          zones=WBGT_ZONES,
                          system_status=system_status,
                          history=get_recent_history(user.conduct_id))
 
+# ==================================================
 # API Routes for real-time functionality
+# ==================================================
 
+@app.route('/set_remarks', methods=['POST'])
+def set_remarks():
+    """Set remarks for a user"""
+    # retrieve data from client
+    user_id = request.form.get('user_id')
+    target_user_name = request.form.get('target_user')
+    remarks = request.form.get('remarks')
+
+
+    # If no target user specified, use current user
+    if not target_user_name:
+        current_user = User.query.get(user_id)
+        if current_user:
+            target_user_name = current_user.name
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        conduct_id = user.conduct_id
+        # Find target user
+        target_user = User.query.filter_by(name=target_user_name, conduct_id=conduct_id).first()
+        if not target_user:
+            return jsonify({"error": "Target user not found"}), 404
+        # Permission check
+        if user.role == 'trainer' and target_user.name != user.name:
+            return jsonify({"error": "Trainers cannot send remarks"}), 401
+        
+         # Update user status with remarks
+        target_user.remarks = remarks
+        
+        # Emit updates to conduct room - CRITICAL: This ensures real-time updates
+        emit_conducting_remarks(conduct_id, target_user)
+        
+        
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error setting zone: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    
+                
+# route to set zone for selected user 
 @app.route('/set_zone', methods=['POST'])
 def set_zone():
     """Set WBGT zone for a user"""
@@ -1104,6 +1194,7 @@ def set_zone():
     target_user_name = request.form.get('target_user')
     zone = request.form.get('zone')
     location = request.form.get('location')
+    remarks = request.form.get('remarks')
 
     # If no target user specified, use current user
     if not target_user_name:
@@ -1206,6 +1297,7 @@ def set_zone():
         target_user.end_time = proposed_end.strftime('%H:%M:%S')
         target_user.work_completed = False
         target_user.pending_rest = False
+        target_user.remarks = remarks
         
         # Track most stringent zone during work cycle
         target_user.most_stringent_zone = get_most_stringent_zone(zone, target_user.most_stringent_zone)
@@ -1855,8 +1947,9 @@ def force_work_completion_check(username):
         logging.error(f"Error in force work completion check: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
+# =====================================================
 # Socket.IO events
-
+# =====================================================
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection"""

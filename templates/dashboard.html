@@ -82,6 +82,10 @@
               </button>
             </div>
 
+            <!-- Remarks section from conducting -->
+            <div class="relative w-48 h-48 mx-auto mb-4">
+            <div id="conducting-remarks"></div>
+            </div>
 
           </div>
         </div>
@@ -201,7 +205,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
               </svg>
             </div>
-            <p class="text-purple-100 text-sm mb-1">Work: 7 secs · Rest: 10 secs</p>
+            <p class="text-purple-100 text-sm mb-1">Work: 30 secs · Rest: 30 secs</p>
             <p class="text-xs text-purple-200">Test Only</p>
           </div>
           <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
@@ -267,17 +271,12 @@ function getRestTimeForZone(zone) {
       'yellow': 15,
       'red': 30,
       'black': 30,
-      'test': 10
+      'test': 30/60
     };
     return restTimes[zone] || 15;
 }</script>
 
 <script>
-// Initialize socket connection
-const socket = io();
-
-// Join conduct room for real-time updates
-socket.emit('join_conduct', { conduct_id: conductId });
 
 // Timer variables (use window to avoid conflicts)
 let currentEndTime = null;
@@ -332,6 +331,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     initializeTimer();
     loadSavedLocations();
     updateCurrentLocation();
+
+    // restore persisted remarks (fixes disappear-on-refresh)
+    restoreRemarksFromLocal();
 
     // Enhanced browser detection and notification initialization
     const userAgent = navigator.userAgent;
@@ -416,7 +418,7 @@ function getRestTimeForZone(zone) {
         'yellow': 15,
         'red': 30,
         'black': 30,
-        'test': 10
+        'test': 30/60
     };
     return restTimes[zone] || 15;
 }
@@ -441,8 +443,6 @@ function initializeTimer() {
         updateTimeDisplay("{{ user.start_time }}", "{{ user.end_time }}");
     {% endif %}
 }
-
-
 
 function startZone(zone) {
     const location = document.getElementById('saved_locations').value || document.getElementById('location_name').value;
@@ -479,6 +479,7 @@ function startZone(zone) {
 }
 
 function startTestCycle() {
+    console.log("test button pressed")
     startZone('test');
 }
 
@@ -514,6 +515,7 @@ function stopCycleEarly() {
 function startTimer() {
     if (window.timerInterval) clearInterval(window.timerInterval);
 
+    //this code runs the timer , the timer will start to decrease every second, and there is a check to see if is 0:00 work completed
     window.timerInterval = setInterval(() => {
         if (!currentEndTime) return;
 
@@ -539,7 +541,10 @@ function startTimer() {
         const timeLeft = Math.max(0, end - now);
         const totalSeconds = Math.ceil(timeLeft / 1000);
 
+    //this handles when the countdown timer hit 0:00
         if (totalSeconds <= 0) {
+            //test using window alert
+            window.alert("Test print timer have completed");
             clearInterval(window.timerInterval);
             handleTimerComplete();
             return;
@@ -554,6 +559,7 @@ function startTimer() {
     }, 1000);
 }
 
+//this function handle the timer countdown completion, when countdown == 0:00
 function handleTimerComplete() {
     document.getElementById('countdown').textContent = '0:00';
     updateProgressRing(0, false);
@@ -562,6 +568,7 @@ function handleTimerComplete() {
         // Work cycle completed - keep display but hide stop button
         document.getElementById('stop-button-container').classList.add('hidden');
         console.log('Work cycle completed - awaiting rest notification');
+        //Now need to know how the rest notification is being triggered.
         // Don't clear the timer display - let Firebase notifications handle the rest prompt
     } else {
         // Rest cycle completed
@@ -614,6 +621,42 @@ function updateZoneDisplay(zone) {
         } else {
             zoneDisplay.textContent = '';
         }
+    }
+}
+
+function updateRemarksDisplay(remarks) {
+    const remarksDisplay = document.getElementById('conducting-remarks');
+    if (!remarksDisplay) return;
+
+    if (remarks && remarks !== 'null') {
+        remarksDisplay.textContent = "Conducting Instruction: " + remarks;
+    } else {
+        remarksDisplay.textContent = "Conducting Instruction: ";
+    }
+}
+
+// Helper: persist remarks keyed by user
+function saveRemarksToLocal(remarks) {
+    try {
+        const key = 'conductingRemarks_' + (window.currentUser || 'unknown');
+        if (remarks && remarks !== 'null') {
+            localStorage.setItem(key, remarks);
+        } else {
+            localStorage.removeItem(key);
+        }
+    } catch (e) {
+        console.warn('Failed to save remarks to localStorage', e);
+    }
+}
+
+// Helper: restore remarks on load
+function restoreRemarksFromLocal() {
+    try {
+        const key = 'conductingRemarks_' + (window.currentUser || 'unknown');
+        const saved = localStorage.getItem(key);
+        if (saved) updateRemarksDisplay(saved);
+    } catch (e) {
+        console.warn('Failed to restore remarks from localStorage', e);
     }
 }
 
@@ -679,37 +722,58 @@ document.getElementById('saved_locations').addEventListener('change', updateCurr
 let currentModal = null;
 
 // Show work complete modal
-function showWorkCompleteModal(data) {
-    const modal = document.getElementById('work-complete-modal');
-    const title = document.getElementById('modal-title');
-    const message = document.getElementById('modal-message');
+//function showWorkCompleteModal(data) {
+//    const modal = document.getElementById('work-complete-modal');
+//    const title = document.getElementById('modal-title');
+//    const message = document.getElementById('modal-message');
 
-    title.textContent = data.title;
-    message.textContent = data.message;
+//    title.textContent = data.title;
+//    message.textContent = data.message;
 
     // Store modal data for button handlers
-    currentModal = data;
+ //   currentModal = data;
 
     // Show modal
-    modal.classList.remove('hidden');
+ //   modal.classList.remove('hidden');
 
-    console.log('Work complete modal shown for:', data.username);
-}
+ //   console.log('Work complete modal shown for:', data.username);
+//}
 
 // Hide work complete modal
-function hideWorkCompleteModal() {
-    const modal = document.getElementById('work-complete-modal');
-    modal.classList.add('hidden');
-    currentModal = null;
-}
+//function hideWorkCompleteModal() {
+ //   const modal = document.getElementById('work-complete-modal');
+ //   modal.classList.add('hidden');
+  //  currentModal = null;
+//}
 
 // Start rest button handler is now managed by work-notifications.js
 
 // Dismiss modal button handler is now managed by work-notifications.js
 
+//=======================================================================
 // Socket event handlers
+//=======================================================================
+// Initialize socket connection
+const socket = io();
+
+// Join conduct room for real-time updates
+socket.emit('join_conduct', { conduct_id: conductId });
+
+socket.on('conducting_remarks', function(data){
+    console.log("Received conducting remarks:", data.remarks);
+    if (data.user === window.currentUser) {
+        // set the remarks in UI
+        updateRemarksDisplay(data.remarks);
+        // persist for page refresh
+        saveRemarksToLocal(data.remarks);
+        //send a notification to user about the new remarks
+        
+    }
+})
+
 socket.on('user_update', function(data) {
     console.log('Received user update:', data);
+    console.log("Remarks from conducting: " + data.remarks);
     if (data.user === window.currentUser) {
         // Update timer without page reload
         if (data.end_time) {
@@ -738,6 +802,8 @@ socket.on('user_update', function(data) {
             startTimer();
             updateTimeDisplay(data.start_time, data.end_time);
         } else if (data.status === 'idle' && !data.work_completed) {
+            
+            
             // Only clear timer if truly idle (not work completed)
             clearInterval(window.timerInterval);
             currentEndTime = null;
@@ -842,6 +908,14 @@ function updateDashboard() {
         .then(data => {
             console.log('Updating dashboard with data:', data);
 
+            // persist/display remarks from server response if present
+            if (data.remarks) {
+                updateRemarksDisplay(data.remarks);
+                saveRemarksToLocal(data.remarks);
+            } else {
+                saveRemarksToLocal(null); // clear stored remarks if none
+            }
+
             if (data.end_time && data.zone) {
                 // User has an active timer (working, resting)
                 currentEndTime = data.end_time;
@@ -890,6 +964,10 @@ function updateDashboard() {
 let automaticNotificationInterval = null;
 let lastNotificationCheck = null;
 
+
+//===================================================================================
+//Notification related functions
+//===================================================================================
 function startAutomaticNotificationCheck() {
     console.log('Starting automatic notification check system for production');
     
