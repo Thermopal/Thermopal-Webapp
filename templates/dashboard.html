@@ -2,7 +2,8 @@
 
 {% block head %}
 <!-- Enhanced Universal Notification System - Works for all WBGT zones and persists across page navigation -->
-<script src="/static/enhanced-notifications.js"></script>
+<!-- <script src="/static/enhanced-notifications.js"></script> -->
+  <script type="module" src="{{ url_for('static', filename='firebase-notifications.js') }}"></script>
 
 {% endblock %}
 
@@ -543,8 +544,6 @@ function startTimer() {
 
     //this handles when the countdown timer hit 0:00
         if (totalSeconds <= 0) {
-            //test using window alert
-            window.alert("Test print timer have completed");
             clearInterval(window.timerInterval);
             handleTimerComplete();
             return;
@@ -570,6 +569,9 @@ function handleTimerComplete() {
         console.log('Work cycle completed - awaiting rest notification');
         //Now need to know how the rest notification is being triggered.
         // Don't clear the timer display - let Firebase notifications handle the rest prompt
+        //this is done in main.py, backend will check periodically and trigger notification
+        // ✅ When timer ends, trigger a custom event for the notification JS
+          window.dispatchEvent(new Event('timer-finished'));
     } else {
         // Rest cycle completed
         console.log('Rest cycle completed! Ready for next work cycle.');
@@ -1092,6 +1094,6 @@ function stopAutomaticNotificationCheck() {
 
 // Make updateDashboard globally available
 window.updateDashboard = updateDashboard;</script>
-<script src="/static/main.js"></script>
-<script src="/static/work-notifications.js"></script>
+<!-- <script src="/static/main.js"></script>
+<script src="/static/work-notifications.js"></script> -->
 {% endblock %}
