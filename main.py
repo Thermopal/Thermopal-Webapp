@@ -638,6 +638,10 @@ def index():
     """Page 1: Home - Conduct Access & Management"""
     return render_template('index_new.html')
 
+@app.route('/firebase-messaging-sw.js')
+def service_worker():
+    return app.send_static_file('firebase-messaging-sw.js')
+
 # New Battalion-Company Structure Routes
 # API to create new conduct 
 @app.route('/create_conduct_new', methods=['GET', 'POST'])
