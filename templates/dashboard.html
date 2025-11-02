@@ -3,7 +3,8 @@
 {% block head %}
 <!-- Enhanced Universal Notification System - Works for all WBGT zones and persists across page navigation -->
 <!-- <script src="/static/enhanced-notifications.js"></script> -->
-  <script type="module" src="{{ url_for('static', filename='firebase-notifications.js') }}"></script>
+ <script src="/static/work-notifications.js"></script>
+ <script type="module" src="{{ url_for('static', filename='firebase-notifications.js') }}"></script>
 
 {% endblock %}
 
@@ -206,7 +207,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
               </svg>
             </div>
-            <p class="text-purple-100 text-sm mb-1">Work: 30 secs · Rest: 30 secs</p>
+            <p class="text-purple-100 text-sm mb-1">Work: 5 secs · Rest: 5 secs</p>
             <p class="text-xs text-purple-200">Test Only</p>
           </div>
           <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
@@ -272,7 +273,7 @@ function getRestTimeForZone(zone) {
       'yellow': 15,
       'red': 30,
       'black': 30,
-      'test': 30/60
+      'test': 15
     };
     return restTimes[zone] || 15;
 }</script>
@@ -419,7 +420,7 @@ function getRestTimeForZone(zone) {
         'yellow': 15,
         'red': 30,
         'black': 30,
-        'test': 30/60
+        'test': 15
     };
     return restTimes[zone] || 15;
 }
@@ -571,10 +572,57 @@ function handleTimerComplete() {
         // Don't clear the timer display - let Firebase notifications handle the rest prompt
         //this is done in main.py, backend will check periodically and trigger notification
         // ✅ When timer ends, trigger a custom event for the notification JS
-          window.dispatchEvent(new Event('timer-finished'));
+        window.dispatchEvent(new Event('work-cycle-timer-finished'));
+        // Attempt to show a local modal immediately for UX (non-authoritative).
+        // Compute zone and restTime safely and retry once if workModal isn't ready.
+        (function showLocalWorkModal() {
+            try {
+                // Determine zone: prefer global, fall back to DOM
+                let zone = (window.currentZone && window.currentZone !== 'null') ? window.currentZone : null;
+                if (!zone) {
+                    const zoneEl = document.getElementById('zone_name_display');
+                    if (zoneEl) {
+                        const txt = zoneEl.textContent || '';
+                        zone = txt.replace(/^Zone:\s*/i, '').trim() || null;
+                    }
+                }
+
+                const restTime = getRestTimeForZone(zone);
+
+                const payload = {
+                    title: '🚨 Work Cycle Complete!',
+                    message: `Your ${zone?.toUpperCase() || 'WORK'} zone work cycle has ended. Start your ${restTime} ${zone === 'test' ? 'second' : 'minute'} rest cycle now!`,
+                    username: window.currentUser,
+                    zone: zone,
+                    rest_duration: restTime
+                };
+
+                // If workModal isn't initialized yet, retry shortly
+                if (typeof workModal === 'undefined' || !workModal || typeof workModal.showWorkCompletionModal !== 'function') {
+                    console.warn('workModal not ready yet; retrying to show modal in 500ms');
+                    setTimeout(() => {
+                        if (typeof workModal !== 'undefined' && workModal && typeof workModal.showWorkCompletionModal === 'function') {
+                            try { workModal.showWorkCompletionModal(payload); } catch (e) { console.error('Failed to show workModal on retry', e); }
+                        } else {
+                            console.warn('workModal still unavailable; modal will rely on server/push fallback');
+                        }
+                    }, 500);
+                } else {
+                    try {
+                        workModal.showWorkCompletionModal(payload);
+                    } catch (e) {
+                        console.error('Error showing work completion modal:', e);
+                    }
+                }
+            } catch (e) {
+                console.error('Unexpected error preparing local work completion modal:', e);
+            }
+        })();
     } else {
         // Rest cycle completed
         console.log('Rest cycle completed! Ready for next work cycle.');
+                  window.dispatchEvent(new Event('rest-cycle-timer-finished'));
+
         currentEndTime = null;
         isWorkCycle = false;
         document.getElementById('zone_name_display').textContent = '';
@@ -615,6 +663,8 @@ function updateProgressRing(timeLeft, isWork) {
 
 function updateZoneDisplay(zone) {
     const zoneDisplay = document.getElementById('zone_name_display');
+    // expose current zone globally so other code (timer completion) can access it
+    try { window.currentZone = zone; } catch (e) { /* ignore */ }
     if (zoneDisplay) {
         if (zone === 'Mandatory Rest') {
             zoneDisplay.textContent = 'Mandatory Rest Period';
@@ -631,7 +681,7 @@ function updateRemarksDisplay(remarks) {
     if (!remarksDisplay) return;
 
     if (remarks && remarks !== 'null') {
-        remarksDisplay.textContent = "Conducting Instruction: " + remarks;
+        remarksDisplay.textContent = "Conducting Instruction: \n" + remarks;
     } else {
         remarksDisplay.textContent = "Conducting Instruction: ";
     }
@@ -769,6 +819,7 @@ socket.on('conducting_remarks', function(data){
         // persist for page refresh
         saveRemarksToLocal(data.remarks);
         //send a notification to user about the new remarks
+        window.dispatchEvent(new Event('new-conducting-remarks'));
         
     }
 })
@@ -1094,6 +1145,6 @@ function stopAutomaticNotificationCheck() {
 
 // Make updateDashboard globally available
 window.updateDashboard = updateDashboard;</script>
-<!-- <script src="/static/main.js"></script>
-<script src="/static/work-notifications.js"></script> -->
+ <!-- <script src="/static/main.js"></script> -->
+<!--<script src="/static/work-notifications.js"></script> -->
 {% endblock %}

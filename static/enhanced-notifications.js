@@ -518,7 +518,7 @@ class EnhancedNotificationManager {
             "yellow": { "work": 30, "rest": 15 },
             "red": { "work": 30, "rest": 30 },
             "black": { "work": 15, "rest": 30 },
-            "test": { "work": 7/60, "rest": 10 },
+            "test": { "work": 15/60, "rest": 15 },
             "cut-off": { "work": 0, "rest": 30 }
         };
         

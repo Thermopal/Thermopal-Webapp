@@ -54,9 +54,19 @@ onMessage(messaging, (payload) => {
 });
 
 // ✅ Handle local timer-finished event from dashboard.html
-window.addEventListener('timer-finished', () => {
+window.addEventListener('work-cycle-timer-finished', () => {
   console.log("⏰ Timer finished, showing notification");
-  showLocalNotification("⏰ Time’s Up!", "Your countdown has ended.");
+  showLocalNotification("⏰ Work Cycle Time’s Up!", "Your countdown has ended.");
+});
+
+window.addEventListener('rest-cycle-timer-finished', () => {
+  console.log("⏰ Rest Timer finished, showing notification");
+  showLocalNotification("⏰ Rest Cycle Time’s Up!", "Your countdown has ended.");
+});
+
+window.addEventListener('new-conducting-remarks', () => {
+  console.log("⏰ New Conducting Instruction, showing notification");
+  showLocalNotification("⏰ New Instruction From Conducting!", "View your instruction.");
 });
 
 // ✅ Show local notification

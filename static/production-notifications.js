@@ -172,7 +172,7 @@ class ProductionNotificationManager {
             'yellow': 15,
             'red': 30,
             'black': 30,
-            'test': 10
+            'test': 5/60
         };
         return restTimes[zone] || 15;
     }

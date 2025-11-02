@@ -33,6 +33,7 @@ async function synchronizeWithServerTime() {
 
 // Initialize Socket.io connection
 document.addEventListener('DOMContentLoaded', async function() {
+  
   // First, synchronize with server time
   await synchronizeWithServerTime();
 
@@ -68,6 +69,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Handle work complete modal
     socketio.on('show_work_complete_modal', function(data) {
+      console.log("Received show_work_complete_modal event from backend")
       console.log('Received work complete modal:', data);
       if (data.username === window.currentUser) {
         showWorkCompleteModal(data);
@@ -482,6 +484,7 @@ function clearTimer() {
 
 // Modal handling functions
 function showWorkCompleteModal(data) {
+  console.log("showing work complete modal NOW");
   const modal = document.getElementById('work-complete-modal');
   if (!modal) return;
   

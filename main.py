@@ -134,7 +134,7 @@ WBGT_ZONES = {
     "yellow": {"work": 30, "rest": 15},
     "red": {"work": 30, "rest": 30},
     "black": {"work": 15, "rest": 30},
-    "test": {"work": 30/60, "rest": 30/60},  # 30 seconds work, 30 seconds rest
+    "test": {"work": 5/60, "rest": 5},  # 5 seconds work, 5 seconds rest
     "cut-off": {"work": 0, "rest": 30}
 }
 
@@ -232,8 +232,7 @@ def emit_user_update(conduct_id, user):
             'end_time': user.end_time,
             'work_completed': user.work_completed,
             'pending_rest': user.pending_rest,
-            'role': user.role,
-            'remarks': user.remarks
+            'role': user.role
         }, room=f'conduct_{conduct_id}')
         print(f"Emitted user update for {user.name} to conduct room {conduct_id}")
     except Exception as e:
@@ -329,24 +328,24 @@ def get_recent_history(conduct_id, limit=None):
         'details': log.details
     } for log in logs]
 
-def show_work_complete_modal(username, zone):
-    """Send work complete modal notification to specific user"""
-    rest_duration = WBGT_ZONES.get(zone, {}).get('rest', 15)
+# def show_work_complete_modal(username, zone):
+#     """Send work complete modal notification to specific user"""
+#     rest_duration = WBGT_ZONES.get(zone, {}).get('rest', 15)
 
-    # Create notification data
-    notification_data = {
-        'username': username,
-        'zone': zone,
-        'rest_duration': rest_duration,
-        'title': 'Work Cycle Complete!',
-        'message': 'Your work cycle has ended. Time to start rest cycle!'
-    }
+#     # Create notification data
+#     notification_data = {
+#         'username': username,
+#         'zone': zone,
+#         'rest_duration': rest_duration,
+#         'title': 'Work Cycle Complete!',
+#         'message': 'Your work cycle has ended. Time to start rest cycle!'
+#     }
 
-    # Emit to specific user
-    socketio.emit('show_work_complete_modal', notification_data)
+#     # Emit to specific user
+#     socketio.emit('show_work_complete_modal', notification_data)
 
-    print(f"Work complete modal shown for {username} in {zone} zone")
-    return True
+#     print(f"Work complete modal shown for {username} in {zone} zone")
+#     return True
 
 def check_conduct_activity():
     """Background task to check for conducts that should be deactivated after 24 hours with no users"""
@@ -391,244 +390,245 @@ def check_conduct_activity():
             db.session.rollback()
 
 # Background task to check for work cycle completions
-# def check_user_cycles():
-#     """Background task to check for completed work cycles and trigger notifications"""
-#     with app.app_context():  # CRITICAL: Add application context
-#         try:
-#             now = sg_now()
-#             current_time_str = now.strftime('%H:%M:%S')
+# Breaking this to 2 backend API (work_complete API and rest_complete API)
+def check_user_cycles():
+    """Background task to check for completed work cycles and trigger notifications"""
+    with app.app_context():  # CRITICAL: Add application context
+        try:
+            now = sg_now()
+            current_time_str = now.strftime('%H:%M:%S')
 
-#             # Find users whose work cycles should have ended
-#             working_users = User.query.filter_by(status='working').all()
+            # Find users whose work cycles should have ended
+            working_users = User.query.filter_by(status='working').all()
 
-#             for user in working_users:
-#                 if user.end_time:
-#                     # Parse end time
-#                     end_time_parts = user.end_time.split(':')
-#                     end_time = now.replace(
-#                         hour=int(end_time_parts[0]),
-#                         minute=int(end_time_parts[1]),
-#                         second=int(end_time_parts[2]) if len(end_time_parts) > 2 else 0,
-#                         microsecond=0
-#                     )
+            for user in working_users:
+                if user.end_time:
+                    # Parse end time
+                    end_time_parts = user.end_time.split(':')
+                    end_time = now.replace(
+                        hour=int(end_time_parts[0]),
+                        minute=int(end_time_parts[1]),
+                        second=int(end_time_parts[2]) if len(end_time_parts) > 2 else 0,
+                        microsecond=0
+                    )
                     
-#                     # Handle midnight rollover: if end time is earlier than start time,
-#                     # it means the end time is on the next day
-#                     if user.start_time:
-#                         start_time_parts = user.start_time.split(':')
-#                         start_hour = int(start_time_parts[0])
-#                         end_hour = int(end_time_parts[0])
+                    # Handle midnight rollover: if end time is earlier than start time,
+                    # it means the end time is on the next day
+                    if user.start_time:
+                        start_time_parts = user.start_time.split(':')
+                        start_hour = int(start_time_parts[0])
+                        end_hour = int(end_time_parts[0])
                         
-#                         # If end time is significantly earlier than start time, assume next day
-#                         if end_hour < start_hour and (start_hour - end_hour) > 12:
-#                             end_time = end_time + timedelta(days=1)
-#                             if not hasattr(user, '_midnight_logged') or not user._midnight_logged:
-#                                 print(f"Server: Midnight rollover detected for working user {user.name}: {user.end_time} moved to next day")
-#                                 user._midnight_logged = True
+                        # If end time is significantly earlier than start time, assume next day
+                        if end_hour < start_hour and (start_hour - end_hour) > 12:
+                            end_time = end_time + timedelta(days=1)
+                            if not hasattr(user, '_midnight_logged') or not user._midnight_logged:
+                                print(f"Server: Midnight rollover detected for working user {user.name}: {user.end_time} moved to next day")
+                                user._midnight_logged = True
 
-#                     # If work cycle has ended
-#                     if now >= end_time and not user.work_completed:
-#                         print(f"Work cycle completed for user {user.name} in zone {user.zone}")
+                    # If work cycle has ended
+                    if now >= end_time and not user.work_completed:
+                        print(f"Work cycle completed for user {user.name} in zone {user.zone}")
 
-#                         # Mark work as completed and pending rest
-#                         user.work_completed = True
-#                         user.pending_rest = True
-#                         user.status = 'idle'  # Change status but keep other data for notification
+                        # Mark work as completed and pending rest
+                        user.work_completed = True
+                        user.pending_rest = True
+                        user.status = 'idle'  # Change status but keep other data for notification
 
-#                         db.session.commit()
-#                         invalidate_user_cache(user.id)
+                        db.session.commit()
+                        invalidate_user_cache(user.id)
 
-#                         # Log completion
-#                         log_activity(user.conduct_id, user.name, 'completed_work', user.zone, 
-#                                     f"Work cycle completed automatically at {current_time_str}")
+                        # Log completion
+                        log_activity(user.conduct_id, user.name, 'completed_work', user.zone, 
+                                    f"Work cycle completed automatically at {current_time_str}")
 
-#                         # Emit user update
-#                         emit_user_update(user.conduct_id, user)
+                        # Emit user update
+                        emit_user_update(user.conduct_id, user)
 
-#                         # Show work complete modal
-#                         show_work_complete_modal(user.name, user.zone)
+                        # Show work complete modal
+                        # show_work_complete_modal(user.name, user.zone)
 
-#                         # Also emit work cycle completed event for enhanced notification handling
-#                         socketio.emit('work_cycle_completed', {
-#                             'username': user.name,
-#                             'zone': user.zone,
-#                             'rest_time': WBGT_ZONES.get(user.zone, {}).get('rest', 15),
-#                             'action': 'work_cycle_completed'
-#                         }, room=f'conduct_{user.conduct_id}')
+                        # Also emit work cycle completed event for enhanced notification handling
+                        socketio.emit('work_cycle_completed', {
+                            'username': user.name,
+                            'zone': user.zone,
+                            'rest_time': WBGT_ZONES.get(user.zone, {}).get('rest', 15),
+                            'action': 'work_cycle_completed'
+                        }, room=f'conduct_{user.conduct_id}')
 
-#                         print(f"Work completion notification sent for {user.name}")
+                        print(f"Work completion notification sent for {user.name}")
 
-#             # Check for resting users
-#             resting_users = User.query.filter_by(status='resting').all()
+            # Check for resting users
+            resting_users = User.query.filter_by(status='resting').all()
 
-#             for user in resting_users:
-#                 if user.end_time:
-#                     # Parse end time
-#                     end_time_parts = user.end_time.split(':')
-#                     end_time = now.replace(
-#                         hour=int(end_time_parts[0]),
-#                         minute=int(end_time_parts[1]),
-#                         second=int(end_time_parts[2]) if len(end_time_parts) > 2 else 0,
-#                         microsecond=0
-#                     )
+            for user in resting_users:
+                if user.end_time:
+                    # Parse end time
+                    end_time_parts = user.end_time.split(':')
+                    end_time = now.replace(
+                        hour=int(end_time_parts[0]),
+                        minute=int(end_time_parts[1]),
+                        second=int(end_time_parts[2]) if len(end_time_parts) > 2 else 0,
+                        microsecond=0
+                    )
                     
-#                     # Handle midnight rollover: if end time is earlier than start time,
-#                     # it means the end time is on the next day
-#                     if user.start_time:
-#                         start_time_parts = user.start_time.split(':')
-#                         start_hour = int(start_time_parts[0])
-#                         end_hour = int(end_time_parts[0])
+                    # Handle midnight rollover: if end time is earlier than start time,
+                    # it means the end time is on the next day
+                    if user.start_time:
+                        start_time_parts = user.start_time.split(':')
+                        start_hour = int(start_time_parts[0])
+                        end_hour = int(end_time_parts[0])
                         
-#                         # If end time is significantly earlier than start time, assume next day
-#                         if end_hour < start_hour and (start_hour - end_hour) > 12:
-#                             end_time = end_time + timedelta(days=1)
-#                             print(f"Server: Midnight rollover detected for resting user {user.name}: {user.end_time} moved to next day")
+                        # If end time is significantly earlier than start time, assume next day
+                        if end_hour < start_hour and (start_hour - end_hour) > 12:
+                            end_time = end_time + timedelta(days=1)
+                            print(f"Server: Midnight rollover detected for resting user {user.name}: {user.end_time} moved to next day")
 
-#                     # Calculate exact time difference
-#                     time_diff = (end_time - now).total_seconds()
+                    # Calculate exact time difference
+                    time_diff = (end_time - now).total_seconds()
                     
-#                     # If rest cycle has ended (use exact timing)
-#                     if time_diff <= 0:
-#                         print(f"Rest cycle completed for user {user.name} (time diff: {time_diff:.1f}s)")
-#                         print(f"TIMING DEBUG: Completion - Start: {user.start_time}, End: {user.end_time}, Actual: {now.strftime('%H:%M:%S')}")
+                    # If rest cycle has ended (use exact timing)
+                    if time_diff <= 0:
+                        print(f"Rest cycle completed for user {user.name} (time diff: {time_diff:.1f}s)")
+                        print(f"TIMING DEBUG: Completion - Start: {user.start_time}, End: {user.end_time}, Actual: {now.strftime('%H:%M:%S')}")
 
-#                         # Store zone and conduct info before clearing for logging
-#                         completed_zone = user.zone
-#                         conduct_id = user.conduct_id
-#                         user_name = user.name
+                        # Store zone and conduct info before clearing for logging
+                        completed_zone = user.zone
+                        conduct_id = user.conduct_id
+                        user_name = user.name
                         
-#                         # Use the intended end time for accurate logging (the stored end_time)
-#                         intended_end_time = user.end_time  # Use the stored end time string directly
+                        # Use the intended end time for accurate logging (the stored end_time)
+                        intended_end_time = user.end_time  # Use the stored end time string directly
 
-#                         # CRITICAL FIX: Log completion BEFORE resetting user data
-#                         # This ensures the zone information is available for logging
-#                         try:
-#                             # RENDER PRODUCTION FIX: Create activity log in separate transaction
-#                             activity_log = ActivityLog(
-#                                 conduct_id=conduct_id,
-#                                 username=user_name,
-#                                 action='completed_rest',
-#                                 zone=completed_zone,
-#                                 details=f"Rest cycle completed automatically at {intended_end_time}",
-#                                 timestamp=end_time  # Use calculated end_time for precise duration
-#                             )
+                        # CRITICAL FIX: Log completion BEFORE resetting user data
+                        # This ensures the zone information is available for logging
+                        try:
+                            # RENDER PRODUCTION FIX: Create activity log in separate transaction
+                            activity_log = ActivityLog(
+                                conduct_id=conduct_id,
+                                username=user_name,
+                                action='completed_rest',
+                                zone=completed_zone,
+                                details=f"Rest cycle completed automatically at {intended_end_time}",
+                                timestamp=end_time  # Use calculated end_time for precise duration
+                            )
                             
-#                             db.session.add(activity_log)
-#                             db.session.flush()  # Flush to get the log ID
-#                             print(f"RENDER DEBUG: Activity log created for {user_name}: completed_rest in {completed_zone}")
+                            db.session.add(activity_log)
+                            db.session.flush()  # Flush to get the log ID
+                            print(f"RENDER DEBUG: Activity log created for {user_name}: completed_rest in {completed_zone}")
                             
-#                             # Reset user data - ENSURE all flags are cleared
-#                             user.status = 'idle'
-#                             user.zone = None
-#                             user.start_time = None
-#                             user.end_time = None
-#                             user.work_completed = False
-#                             user.pending_rest = False
-#                             user.most_stringent_zone = None  # Reset stringent zone tracker
+                            # Reset user data - ENSURE all flags are cleared
+                            user.status = 'idle'
+                            user.zone = None
+                            user.start_time = None
+                            user.end_time = None
+                            user.work_completed = False
+                            user.pending_rest = False
+                            user.most_stringent_zone = None  # Reset stringent zone tracker
                             
-#                             # Commit BOTH activity log and user changes together
-#                             db.session.commit()
-#                             print(f"RENDER DEBUG: Combined database commit successful for {user_name} rest completion")
+                            # Commit BOTH activity log and user changes together
+                            db.session.commit()
+                            print(f"RENDER DEBUG: Combined database commit successful for {user_name} rest completion")
                             
-#                             # CRITICAL: Add a small delay to ensure database transaction is fully completed
-#                             import time
-#                             time.sleep(0.2)  # 200ms delay to ensure database consistency on Render
+                            # CRITICAL: Add a small delay to ensure database transaction is fully completed
+                            import time
+                            time.sleep(0.2)  # 200ms delay to ensure database consistency on Render
                             
-#                             # Verify the activity log was actually saved
-#                             verification_log = ActivityLog.query.filter_by(
-#                                 conduct_id=conduct_id,
-#                                 username=user_name,
-#                                 action='completed_rest'
-#                             ).order_by(ActivityLog.timestamp.desc()).first()
+                            # Verify the activity log was actually saved
+                            verification_log = ActivityLog.query.filter_by(
+                                conduct_id=conduct_id,
+                                username=user_name,
+                                action='completed_rest'
+                            ).order_by(ActivityLog.timestamp.desc()).first()
                             
-#                             if verification_log:
-#                                 print(f"RENDER DEBUG: Activity log verified in database - ID: {verification_log.id}, Time: {verification_log.timestamp}")
-#                             else:
-#                                 print(f"RENDER DEBUG: WARNING - Activity log not found in database after commit")
+                            if verification_log:
+                                print(f"RENDER DEBUG: Activity log verified in database - ID: {verification_log.id}, Time: {verification_log.timestamp}")
+                            else:
+                                print(f"RENDER DEBUG: WARNING - Activity log not found in database after commit")
                             
-#                         except Exception as combined_error:
-#                             print(f"RENDER DEBUG: Error in combined transaction: {combined_error}")
-#                             db.session.rollback()
+                        except Exception as combined_error:
+                            print(f"RENDER DEBUG: Error in combined transaction: {combined_error}")
+                            db.session.rollback()
                             
-#                             # Fallback: Try logging activity separately
-#                             try:
-#                                 fallback_log = ActivityLog(
-#                                     conduct_id=conduct_id,
-#                                     username=user_name,
-#                                     action='completed_rest',
-#                                     zone=completed_zone,
-#                                     details=f"Rest cycle completed automatically at {intended_end_time} (fallback)",
-#                                     timestamp=end_time  # Use intended end time for accuracy
-#                                 )
-#                                 db.session.add(fallback_log)
-#                                 db.session.commit()
-#                                 print(f"RENDER DEBUG: Fallback activity log successful for {user_name}")
+                            # Fallback: Try logging activity separately
+                            try:
+                                fallback_log = ActivityLog(
+                                    conduct_id=conduct_id,
+                                    username=user_name,
+                                    action='completed_rest',
+                                    zone=completed_zone,
+                                    details=f"Rest cycle completed automatically at {intended_end_time} (fallback)",
+                                    timestamp=end_time  # Use intended end time for accuracy
+                                )
+                                db.session.add(fallback_log)
+                                db.session.commit()
+                                print(f"RENDER DEBUG: Fallback activity log successful for {user_name}")
                                 
-#                                 # Now update user separately
-#                                 user.status = 'idle'
-#                                 user.zone = None
-#                                 user.start_time = None
-#                                 user.end_time = None
-#                                 user.work_completed = False
-#                                 user.pending_rest = False
-#                                 user.most_stringent_zone = None  # Reset stringent zone tracker
-#                                 db.session.commit()
-#                                 print(f"RENDER DEBUG: Fallback user update successful for {user_name}")
+                                # Now update user separately
+                                user.status = 'idle'
+                                user.zone = None
+                                user.start_time = None
+                                user.end_time = None
+                                user.work_completed = False
+                                user.pending_rest = False
+                                user.most_stringent_zone = None  # Reset stringent zone tracker
+                                db.session.commit()
+                                print(f"RENDER DEBUG: Fallback user update successful for {user_name}")
                                 
-#                             except Exception as fallback_error:
-#                                 print(f"RENDER DEBUG: Fallback also failed: {fallback_error}")
-#                                 db.session.rollback()
+                            except Exception as fallback_error:
+                                print(f"RENDER DEBUG: Fallback also failed: {fallback_error}")
+                                db.session.rollback()
 
-#                         invalidate_user_cache(user.id)
+                        invalidate_user_cache(user.id)
 
-#                         # Emit user update
-#                         emit_user_update(conduct_id, user)
+                        # Emit user update
+                        emit_user_update(conduct_id, user)
 
-#                         # Emit specific event for zone button re-enabling
-#                         socketio.emit('rest_cycle_completed', {
-#                             'user': user_name,
-#                             'zone': completed_zone,
-#                             'action': 'rest_cycle_completed'
-#                         }, room=f'conduct_{conduct_id}')
+                        # Emit specific event for zone button re-enabling
+                        socketio.emit('rest_cycle_completed', {
+                            'user': user_name,
+                            'zone': completed_zone,
+                            'action': 'rest_cycle_completed'
+                        }, room=f'conduct_{conduct_id}')
 
-#                         # Force immediate history refresh for monitors - ENHANCED VERSION
-#                         try:
-#                             # Small delay before emitting to ensure database is fully consistent
-#                             time.sleep(0.1)
+                        # Force immediate history refresh for monitors - ENHANCED VERSION
+                        try:
+                            # Small delay before emitting to ensure database is fully consistent
+                            time.sleep(0.1)
                             
-#                             updated_history = get_recent_history(conduct_id)
+                            updated_history = get_recent_history(conduct_id)
                             
-#                             # Emit history update with complete data
-#                             socketio.emit('history_update', {
-#                                 'history': updated_history,
-#                                 'conduct_id': conduct_id,
-#                                 'trigger': 'rest_completion'
-#                             }, room=f'conduct_{conduct_id}')
-#                             print(f"RENDER DEBUG: History update emitted with {len(updated_history)} entries")
+                            # Emit history update with complete data
+                            socketio.emit('history_update', {
+                                'history': updated_history,
+                                'conduct_id': conduct_id,
+                                'trigger': 'rest_completion'
+                            }, room=f'conduct_{conduct_id}')
+                            print(f"RENDER DEBUG: History update emitted with {len(updated_history)} entries")
                             
-#                             # Also emit a global history refresh to ensure all monitors update
-#                             socketio.emit('force_history_refresh', {
-#                                 'conduct_id': conduct_id,
-#                                 'message': f'{user_name} completed rest cycle in {completed_zone} zone',
-#                                 'action': 'rest_completed'
-#                             }, room=f'conduct_{conduct_id}')
-#                             print(f"RENDER DEBUG: Force history refresh emitted for {user_name}")
+                            # Also emit a global history refresh to ensure all monitors update
+                            socketio.emit('force_history_refresh', {
+                                'conduct_id': conduct_id,
+                                'message': f'{user_name} completed rest cycle in {completed_zone} zone',
+                                'action': 'rest_completed'
+                            }, room=f'conduct_{conduct_id}')
+                            print(f"RENDER DEBUG: Force history refresh emitted for {user_name}")
                             
-#                         except Exception as history_error:
-#                             print(f"RENDER DEBUG: Error emitting history update: {history_error}")
-#                             # Fallback: Try again with simpler data
-#                             try:
-#                                 socketio.emit('force_history_refresh', {
-#                                     'conduct_id': conduct_id,
-#                                     'fallback': True
-#                                 }, room=f'conduct_{conduct_id}')
-#                             except:
-#                                 pass
+                        except Exception as history_error:
+                            print(f"RENDER DEBUG: Error emitting history update: {history_error}")
+                            # Fallback: Try again with simpler data
+                            try:
+                                socketio.emit('force_history_refresh', {
+                                    'conduct_id': conduct_id,
+                                    'fallback': True
+                                }, room=f'conduct_{conduct_id}')
+                            except:
+                                pass
 
-#                         print(f"Rest completion processed successfully for {user_name} in zone {completed_zone}")
+                        print(f"Rest completion processed successfully for {user_name} in zone {completed_zone}")
 
-#         except Exception as e:
-#             logging.error(f"Error in work completion check: {e}")
+        except Exception as e:
+            logging.error(f"Error in work completion check: {e}")
 
 # Routes (keeping all existing routes unchanged...)
 
@@ -1470,7 +1470,7 @@ def start_rest():
         # Log activity with enhanced details showing stringent zone logic
         if zone_for_rest == 'test':
             # Convert minutes to seconds for test zone display (0.1667 min = 10 sec)
-            rest_seconds = int(rest_duration * 60)
+            rest_seconds = int(rest_duration)
             log_activity(user.conduct_id, user.name, 'start_rest', user.zone, 
                         f"Started {rest_seconds} second rest period (based on most stringent zone: {zone_for_rest})")
         else:
@@ -1479,6 +1479,7 @@ def start_rest():
             log_activity(user.conduct_id, user.name, 'start_rest', user.zone, 
                         f"Started {rest_minutes} minute rest period (based on most stringent zone: {zone_for_rest})")
 
+        print(f"Updating user details")
         # CRITICAL: Emit user update to all clients in conduct room
         emit_user_update(user.conduct_id, user)
 
@@ -1929,7 +1930,7 @@ def force_work_completion_check(username):
 
         if user.work_completed and user.pending_rest and user.zone:
             # Show work complete modal
-            show_work_complete_modal(user.name, user.zone)
+            # show_work_complete_modal(user.name, user.zone)
             
             # Emit work cycle completed event
             socketio.emit('work_cycle_completed', {
@@ -2078,22 +2079,22 @@ def change_password():
     return render_template('change_password.html')
 
 # Schedule work completion checks every 5 seconds
-# def start_background_tasks():
-#     """Start background tasks"""
-#     def run_checks():
-#         conduct_check_counter = 0
-#         while True:
-#             eventlet.sleep(1)  # Check every 1 second for responsive completion detection
-#             check_user_cycles()
+def start_background_tasks():
+    """Start background tasks"""
+    def run_checks():
+        conduct_check_counter = 0
+        while True:
+            eventlet.sleep(1)  # Check every 1 second for responsive completion detection
+            check_user_cycles()
             
-#             # Check conduct activity every 60 seconds (1 minute)
-#             conduct_check_counter += 1
-#             if conduct_check_counter >= 60:
-#                 check_conduct_activity()
-#                 conduct_check_counter = 0
+            # Check conduct activity every 60 seconds (1 minute)
+            conduct_check_counter += 1
+            if conduct_check_counter >= 60:
+                check_conduct_activity()
+                conduct_check_counter = 0
 
-#     eventlet.spawn(run_checks)
-#     print("Background task started for work cycle monitoring (1-second intervals) and conduct activity checking (1-minute intervals)")
+    eventlet.spawn(run_checks)
+    print("Background task started for work cycle monitoring (1-second intervals) and conduct activity checking (1-minute intervals)")
 
 # Add cleanup handler
 @app.teardown_appcontext
@@ -2106,7 +2107,7 @@ def cleanup_db(error):
 # Expose app for WSGI deployment (like gunicorn)
 if __name__ == '__main__':
     # Start background tasks
-    # start_background_tasks()
+    start_background_tasks()
     background_task_started = True
 
     # Use SocketIO's built-in server instead of Gunicorn for better WebSocket support
@@ -2114,5 +2115,5 @@ if __name__ == '__main__':
                  allow_unsafe_werkzeug=True, log_output=False)
 else:
     # For deployment with gunicorn, start background tasks
-    # start_background_tasks()
+    start_background_tasks()
     background_task_started = True
