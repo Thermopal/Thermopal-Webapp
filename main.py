@@ -58,7 +58,8 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 }
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Initialize extensions with production-ready settings
+# Initialize extensions with production-ready settings very important, flask and socketio in local is working single thread,
+#  in production it needs eventlet and guinorn for socket and flask work async and properyl
 socketio = SocketIO(app, async_mode='eventlet', ping_timeout=60, ping_interval=25, 
                     logger=False, engineio_logger=False, cors_allowed_origins="*",
                     transports=['websocket', 'polling'])
