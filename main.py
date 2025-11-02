@@ -2111,6 +2111,8 @@ if __name__ == '__main__':
     start_background_tasks()
     background_task_started = True
 
+    print("SocketIO async mode:", socketio.async_mode)
+
     # Use SocketIO's built-in server instead of Gunicorn for better WebSocket support
     socketio.run(app, host='0.0.0.0', port=5000, debug=False, use_reloader=False, 
                  allow_unsafe_werkzeug=True, log_output=False)
