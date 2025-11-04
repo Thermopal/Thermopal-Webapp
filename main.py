@@ -32,8 +32,11 @@ logging.basicConfig(
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
 
-# ✅ Initialize Firebase Admin SDK (only once)
-cred = credentials.Certificate("firebase-key.json")
+# Load JSON from environment variable
+firebase_key = os.environ.get("FIREBASE_CREDENTIALS_JSON")
+cred = credentials.Certificate(json.loads(firebase_key))
+
+# Initialize Firebase Admin SDK
 firebase_admin.initialize_app(cred)
 
 # # ✅ This makes your firebase service worker available at /firebase-messaging-sw.js
