@@ -32,22 +32,19 @@ logging.basicConfig(
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
 
-# Load JSON from environment variable
+# # production firebase
+# # Load JSON from environment variable
 firebase_key = os.environ.get("FIREBASE_CREDENTIALS_JSON")
 cred = credentials.Certificate(json.loads(firebase_key))
 
 # Initialize Firebase Admin SDK
 firebase_admin.initialize_app(cred)
 
-# # ✅ This makes your firebase service worker available at /firebase-messaging-sw.js
-# @app.route('/firebase-messaging-sw.js')
-# def service_worker():
-#     return send_from_directory('static', 'firebase-messaging-sw.js')
 
-# @app.route('/chrome-sw.js')
-# def chrome_service_worker():
-#     return send_from_directory('static', 'chrome-sw.js')
-
+# lcoal testing firebase
+# Initialize Firebase Admin
+# cred = credentials.Certificate("firebase-key.json")
+# firebase_admin.initialize_app(cred)
 
 # ----------------------------
 # Configure database with optimizations
@@ -839,6 +836,29 @@ def view_conducts_new():
         flash(f'Error loading battalion overview: {str(e)}', 'error')
         return redirect(url_for('index'))
 
+@app.route('/battalion_overview/<int:battalion_id>')
+def battalion_overview(battalion_id):
+    try:
+        battalion = Battalion.query.get_or_404(battalion_id)
+        companies = Company.query.filter_by(battalion_id=battalion_id).order_by(Company.name).all()
+        
+        # Calculate statistics
+        total_conducts = 0
+        active_conducts = 0
+        
+        for company in companies:
+            total_conducts += len(company.conducts)
+            active_conducts += len([c for c in company.conducts if c.status == 'active'])
+
+        return render_template('battalion_overview.html',
+                             battalion=battalion,
+                             company_data=companies,
+                             total_conducts=total_conducts,
+                             active_conducts=active_conducts)
+    except Exception as e:
+        flash(f'Error loading battalion overview: {str(e)}', 'error')
+        return redirect(url_for('index'))
+    
 # API to retrieve all company conduct via company ID
 @app.route('/company_conducts/<int:company_id>')
 def company_conducts(company_id):
