@@ -2,6 +2,8 @@
 import eventlet
 eventlet.monkey_patch()
 
+import firebase_admin
+from firebase_admin import credentials, messaging
 import os
 import logging
 import time
@@ -29,6 +31,10 @@ logging.basicConfig(
 # ----------------------------
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
+
+# ✅ Initialize Firebase Admin SDK (only once)
+cred = credentials.Certificate("firebase-key.json")
+firebase_admin.initialize_app(cred)
 
 # # ✅ This makes your firebase service worker available at /firebase-messaging-sw.js
 # @app.route('/firebase-messaging-sw.js')
@@ -161,6 +167,23 @@ CACHE_TIMEOUT = 30  # seconds
 
 # Background task control
 background_task_started = False
+
+# ✅ Function to send FCM notification
+def send_fcm_notification(token, title, body):
+    try:
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title=title,
+                body=body
+            ),
+            token=token
+        )
+        response = messaging.send(message)
+        print("✅ Notification sent successfully:", response)
+        return True
+    except Exception as e:
+        print("❌ Error sending notification:", e)
+        return False
 
 def get_cached_user(user_id):
     """Get user from cache or database"""
@@ -632,6 +655,26 @@ def check_user_cycles():
             logging.error(f"Error in work completion check: {e}")
 
 # Routes (keeping all existing routes unchanged...)
+
+# ✅ Route to trigger notification
+@app.route('/send-notification', methods=['POST'])
+def send_notification():
+    data = request.json
+    token = data.get('token')
+    # print the token to see
+    print(f"Token received: {token}")
+    title = data.get('title', 'Notification')
+    body = data.get('body', 'You have a new message.')
+
+    if not token:
+        return jsonify({'error': 'Missing token'}), 400
+
+    success = send_fcm_notification(token, title, body)
+    if success:
+        return jsonify({'message': 'Notification sent successfully'}), 200
+    else:
+        return jsonify({'error': 'Failed to send notification'}), 500
+
 
 @app.route('/')
 def index():

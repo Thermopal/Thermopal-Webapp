@@ -18,6 +18,7 @@
           <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             WBGT Tracker
           </h1>
+            <input type="text" id="token" style="width:100%;" placeholder="Token will appear here">
           <p class="text-sm text-gray-500 mt-1">Real-time work cycle monitoring</p>
         </div>
 
@@ -572,7 +573,20 @@ function handleTimerComplete() {
         // Don't clear the timer display - let Firebase notifications handle the rest prompt
         //this is done in main.py, backend will check periodically and trigger notification
         // ✅ When timer ends, trigger a custom event for the notification JS
-        window.dispatchEvent(new Event('work-cycle-timer-finished'));
+        // window.dispatchEvent(new Event('work-cycle-timer-finished'));
+       const token = document.getElementById('token').value;
+       fetch('/send-notification', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           token: token,
+           title: "🔥 Work Cycle Complete",
+           body: "Please rest now!"
+         })
+       })
+       .then(res => res.json())
+       .then(data => console.log('Response:', data))
+       .catch(err => console.error('Error:', err));
         // Attempt to show a local modal immediately for UX (non-authoritative).
         // Compute zone and restTime safely and retry once if workModal isn't ready.
         (function showLocalWorkModal() {
@@ -621,7 +635,19 @@ function handleTimerComplete() {
     } else {
         // Rest cycle completed
         console.log('Rest cycle completed! Ready for next work cycle.');
-                  window.dispatchEvent(new Event('rest-cycle-timer-finished'));
+               const token = document.getElementById('token').value;
+         fetch('/send-notification', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           token: token,
+           title: "🔥 Rest Cycle Complete",
+           body: "Congratualation for the completion!"
+         })
+       })
+       .then(res => res.json())
+       .then(data => console.log('Response:', data))
+       .catch(err => console.error('Error:', err));
 
         currentEndTime = null;
         isWorkCycle = false;
