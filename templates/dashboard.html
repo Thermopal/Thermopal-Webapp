@@ -75,7 +75,7 @@
             </div>
 
             <!-- Stop Button and Clear Interface -->
-            <div id="stop-button-container" class="hidden">
+            <div id="stop-button-container" class="hidden mb-4">
               <button id="stop-cycle-button" onclick="stopCycleEarly()" class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 mr-2">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -86,10 +86,12 @@
             </div>
 
             <!-- Remarks section from conducting -->
-            <div class="relative w-48 h-48 mx-auto mb-4">
-            <div id="conducting-remarks"></div>
+            <div class="space-y-6">
+             <div class="relative w-90 h-auto mx-auto mb-4 bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-xl">
+                <h2>Conducting Remarks:</h2>
+             <div id="conducting-remarks"></div>
+             </div>
             </div>
-
           </div>
         </div>
       </div>
@@ -707,9 +709,9 @@ function updateRemarksDisplay(remarks) {
     if (!remarksDisplay) return;
 
     if (remarks && remarks !== 'null') {
-        remarksDisplay.textContent = "Conducting Instruction: \n" + remarks;
+        remarksDisplay.textContent = remarks;
     } else {
-        remarksDisplay.textContent = "Conducting Instruction: ";
+        remarksDisplay.textContent = "NIL";
     }
 }
 
@@ -842,10 +844,23 @@ socket.on('conducting_remarks', function(data){
     if (data.user === window.currentUser) {
         // set the remarks in UI
         updateRemarksDisplay(data.remarks);
+        //send a notification to user about the new remarks
+        const token = document.getElementById('token').value;
+         fetch('/send-notification', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           token: token,
+           title: "🔥 Instructions from conducting",
+           body: data.remarks
+         })
+       })
+       .then(res => res.json())
+       .then(data => console.log('Response:', data))
+       .catch(err => console.error('Error:', err));
         // persist for page refresh
         saveRemarksToLocal(data.remarks);
-        //send a notification to user about the new remarks
-        window.dispatchEvent(new Event('new-conducting-remarks'));
+        
         
     }
 })
