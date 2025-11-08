@@ -407,7 +407,7 @@ class WorkCompletionModal {
 
         // ENHANCED: First, always check server state immediately for pending work completion
         // This ensures users see notifications even on fresh page loads
-        this.performImmediateWorkCompletionCheck();
+        // this.performImmediateWorkCompletionCheck();
 
         // Check localStorage for dismissed notifications that need progressive reminders
         const dismissedData = localStorage.getItem('workCompletionDismissed');
