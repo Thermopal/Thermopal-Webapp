@@ -18,7 +18,7 @@
           <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             WBGT Tracker
           </h1>
-            <input type="text" id="token" style="width:100%;" placeholder="Token will appear here">
+            <input type="text" id="token" style="width:100%;" placeholder="Token will appear here" class="hidden">
           <p class="text-sm text-gray-500 mt-1">Real-time work cycle monitoring</p>
         </div>
 
@@ -409,7 +409,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // PRODUCTION ENHANCEMENT: Start automatic notification checking
     // This ensures notifications work even without page refresh on Render
-    startAutomaticNotificationCheck();
+    //startAutomaticNotificationCheck();
 
     // Update dashboard after initialization
     updateDashboard();
@@ -1010,6 +1010,7 @@ function updateDashboard() {
                 saveRemarksToLocal(null); // clear stored remarks if none
             }
 
+            console.log("Printnttntnt: page refresh ---- checking dashboard update");
             if (data.end_time && data.zone) {
                 // User has an active timer (working, resting)
                 currentEndTime = data.end_time;
@@ -1055,134 +1056,18 @@ function updateDashboard() {
 
 // PRODUCTION ENHANCEMENT: Automatic notification checking system
 // This runs continuously and shows notifications even without page refresh
-let automaticNotificationInterval = null;
-let lastNotificationCheck = null;
+
 
 
 //===================================================================================
 //Notification related functions
 //===================================================================================
-function startAutomaticNotificationCheck() {
-    console.log('Starting automatic notification check system for production');
-    
-    // Clear any existing interval
-    if (automaticNotificationInterval) {
-        clearInterval(automaticNotificationInterval);
-    }
-    
-    // Check every 3 seconds for work completion
-    automaticNotificationInterval = setInterval(() => {
-        checkForAutomaticNotification();
-    }, 3000);
-}
 
-function checkForAutomaticNotification() {
-    if (!window.currentUser) return;
-    
-    fetch(`/get_user_state/${window.currentUser}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.work_completed && data.pending_rest) {
-                const workEndTime = new Date(data.end_time).getTime();
-                
-                // Only show notification if this is a new work completion
-                if (lastNotificationCheck !== workEndTime) {
-                    console.log('Automatic notification: New work completion detected');
-                    lastNotificationCheck = workEndTime;
-                    
-                    // Show production notification immediately
-                    showAutomaticProductionNotification(data);
-                    
-                    // Also trigger the modal system
-                    if (typeof workModal !== 'undefined') {
-                        const restTime = getRestTimeForZone(data.zone);
-                        workModal.showWorkCompletionModal({
-                            title: '🚨 Work Cycle Complete!',
-                            message: `Your ${data.zone?.toUpperCase() || 'WORK'} zone work cycle has ended. Start your ${restTime} ${data.zone === 'test' ? 'second' : 'minute'} rest cycle now!`,
-                            username: window.currentUser,
-                            zone: data.zone,
-                            rest_duration: restTime
-                        });
-                    }
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error in automatic notification check:', error);
-        });
-}
 
-function showAutomaticProductionNotification(data) {
-    console.log('Showing automatic production notification for work completion');
-    
-    if (!('Notification' in window) || Notification.permission !== 'granted') {
-        console.log('Cannot show automatic notification - not supported or no permission');
-        return;
-    }
-    
-    const restTime = getRestTimeForZone(data.zone);
-    const timeUnit = data.zone === 'test' ? 'second' : 'minute';
-    
-    try {
-        const notification = new Notification('🚨 Work Cycle Complete!', {
-            body: `Your ${data.zone?.toUpperCase() || 'WORK'} zone work cycle has ended. Start your ${restTime} ${timeUnit} rest cycle now!`,
-            icon: '/static/icon-192.png',
-            tag: 'wbgt-auto-notification-' + Date.now(),
-            requireInteraction: true,
-            silent: false
-        });
 
-        notification.onclick = () => {
-            window.focus();
-            notification.close();
-        };
 
-        // Auto-remind after 15 seconds if user doesn't respond
-        setTimeout(() => {
-            if (notification) {
-                notification.close();
-                showAutomaticReminderNotification(data, restTime, timeUnit);
-            }
-        }, 15000);
 
-        console.log('Automatic production notification shown');
-    } catch (error) {
-        console.error('Failed to show automatic production notification:', error);
-    }
-}
 
-function showAutomaticReminderNotification(data, restTime, timeUnit) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') {
-        return;
-    }
-    
-    try {
-        const reminderNotification = new Notification('⚠️ Rest Reminder', {
-            body: `Don't forget: You need to start your rest cycle!`,
-            icon: '/static/icon-192.png',
-            tag: 'wbgt-auto-reminder-' + Date.now(),
-            requireInteraction: true,
-            silent: false
-        });
-
-        reminderNotification.onclick = () => {
-            window.focus();
-            reminderNotification.close();
-        };
-
-        console.log('Automatic reminder notification shown');
-    } catch (error) {
-        console.error('Failed to show automatic reminder notification:', error);
-    }
-}
-
-function stopAutomaticNotificationCheck() {
-    if (automaticNotificationInterval) {
-        clearInterval(automaticNotificationInterval);
-        automaticNotificationInterval = null;
-        console.log('Automatic notification checking stopped');
-    }
-}
 
 // Make updateDashboard globally available
 window.updateDashboard = updateDashboard;</script>
