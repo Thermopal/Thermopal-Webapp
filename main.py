@@ -141,7 +141,7 @@ WBGT_ZONES = {
     "yellow": {"work": 30, "rest": 15},
     "red": {"work": 30, "rest": 30},
     "black": {"work": 15, "rest": 30},
-    "test": {"work": 5/60, "rest": 5},  # 5 seconds work, 5 seconds rest
+    "test": {"work": 5/60, "rest": 5/60},  # 5 seconds work, 5 seconds rest
     "cut-off": {"work": 0, "rest": 30}
 }
 
@@ -1088,7 +1088,8 @@ def user_setup(conduct_id):
             if existing_user:
                 # Update existing user
                 existing_user.role = role
-                existing_user.status = 'idle' if role == 'trainer' else 'monitoring'
+                if(existing_user.status not in ['working', 'resting']):
+                   existing_user.status = 'idle' if role == 'trainer' else 'monitoring'
                 db.session.commit()
                 user = existing_user
             else:
@@ -1513,15 +1514,16 @@ def start_rest():
         print(f"STRINGENCY DEBUG: User {user.name} - Current zone: {user.zone}, Most stringent: {user.most_stringent_zone}, Rest duration: {rest_duration} min")
 
         # Handle test cycle differently (seconds vs minutes)
-        if user.zone == 'test':
-            end_time = now + timedelta(seconds=rest_duration)
-        else:
-            end_time = now + timedelta(minutes=rest_duration)
+        # if user.zone == 'test':
+        #     end_time = now + timedelta(seconds=rest_duration)
+        # else:
+        end_time = now + timedelta(minutes=rest_duration)
 
         # Store times with exact precision to ensure accurate duration tracking
         start_time_str = now.strftime('%H:%M:%S')
         end_time_str = end_time.strftime('%H:%M:%S')
-
+        
+        print(f"TIMING DEBUG: Calculated rest end time for user {user.name} - Now: {start_time_str}, End: {end_time_str}, duration: {rest_duration}min")
         user.status = 'resting'
         user.start_time = start_time_str
         user.end_time = end_time_str
@@ -1541,7 +1543,7 @@ def start_rest():
         # Log activity with enhanced details showing stringent zone logic
         if zone_for_rest == 'test':
             # Convert minutes to seconds for test zone display (0.1667 min = 10 sec)
-            rest_seconds = int(rest_duration)
+            rest_seconds = int(rest_duration*60)
             log_activity(user.conduct_id, user.name, 'start_rest', user.zone, 
                         f"Started {rest_seconds} second rest period (based on most stringent zone: {zone_for_rest})")
         else:
