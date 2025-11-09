@@ -99,7 +99,7 @@
       <!-- Location Management -->
       <div class="space-y-6">
         <div class="bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-xl p-4">
-          <h3 class="text-base font-semibold text-gray-900 mb-3 flex items-center">
+          <!-- <h3 class="text-base font-semibold text-gray-900 mb-3 flex items-center">
             <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -120,7 +120,10 @@
               <option value="">Select saved location</option>
             </select>
             <div id="current_location" class="text-xs text-gray-600 bg-gray-50/80 p-2 rounded-md border border-gray-200"></div>
-          </div>
+          </div> -->
+        <h2>Your Current Location:</h2>
+        <p id="coords">Fetching...</p>
+        <p id="address"></p>
         </div>
         
       </div>
@@ -282,6 +285,39 @@ function getRestTimeForZone(zone) {
 }</script>
 
 <script>
+// Run this when the page loads
+    window.onload = async function() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(successCallback, errorCallback);
+      } else {
+        document.getElementById('coords').innerText = "Geolocation not supported.";
+      }
+    }
+
+    async function successCallback(position) {
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+
+      // Display raw coordinates
+      document.getElementById('coords').innerText = `Latitude: ${lat}, Longitude: ${lon}`;
+
+      try {
+        // Use OpenStreetMap's free reverse geocoding
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+        const data = await response.json();
+
+        const locationName = data.display_name;
+        document.getElementById('address').innerText = `📍 ${locationName}`;
+      } catch (error) {
+        console.error(error);
+        document.getElementById('address').innerText = "Unable to get location name.";
+      }
+    }
+
+    function errorCallback(error) {
+      document.getElementById('coords').innerText = "Location access denied or unavailable.";
+      console.error(error);
+    }
 
 // Timer variables (use window to avoid conflicts)
 let currentEndTime = null;
@@ -334,8 +370,8 @@ function initializeTimer() {
 document.addEventListener('DOMContentLoaded', async function() {
     await synchronizeWithServerTime();
     initializeTimer();
-    loadSavedLocations();
-    updateCurrentLocation();
+//    loadSavedLocations();
+//    updateCurrentLocation();
 
     // restore persisted remarks (fixes disappear-on-refresh)
     restoreRemarksFromLocal();
@@ -450,7 +486,7 @@ function initializeTimer() {
 }
 
 function startZone(zone) {
-    const location = document.getElementById('saved_locations').value || document.getElementById('location_name').value;
+    const location = document.getElementById('address').value;
 
     fetch('/set_zone', {
         method: 'POST',
@@ -753,50 +789,50 @@ function updateTimeDisplay(startTime, endTime) {
 }
 
 // Location management
-function saveCurrentLocation() {
-    const locationName = document.getElementById('location_name').value.trim();
-    if (!locationName) return;
+//function saveCurrentLocation() {
+//    const locationName = document.getElementById('location_name').value.trim();
+//    if (!locationName) return;
+//
+//    let savedLocations = JSON.parse(localStorage.getItem('savedLocations') || '[]');
+//    if (!savedLocations.includes(locationName)) {
+//        savedLocations.push(locationName);
+//        localStorage.setItem('savedLocations', JSON.stringify(savedLocations));
+//        loadSavedLocations();
+//    }
+//
+//    document.getElementById('location_name').value = '';
+//}
 
-    let savedLocations = JSON.parse(localStorage.getItem('savedLocations') || '[]');
-    if (!savedLocations.includes(locationName)) {
-        savedLocations.push(locationName);
-        localStorage.setItem('savedLocations', JSON.stringify(savedLocations));
-        loadSavedLocations();
-    }
+//function loadSavedLocations() {
+//     const savedLocations = JSON.parse(localStorage.getItem('savedLocations') || '[]');
+//     const select = document.getElementById('saved_locations');
 
-    document.getElementById('location_name').value = '';
-}
+//     // Clear existing options except first
+//     while (select.children.length > 1) {
+//         select.removeChild(select.lastChild);
+//     }
 
-function loadSavedLocations() {
-    const savedLocations = JSON.parse(localStorage.getItem('savedLocations') || '[]');
-    const select = document.getElementById('saved_locations');
+//     savedLocations.forEach(location => {
+//         const option = document.createElement('option');
+//         option.value = location;
+//         option.textContent = location;
+//         select.appendChild(option);
+//     });
+// }
 
-    // Clear existing options except first
-    while (select.children.length > 1) {
-        select.removeChild(select.lastChild);
-    }
+// function updateCurrentLocation() {
+//     const currentDiv = document.getElementById('current_location');
+//     const selectedLocation = document.getElementById('saved_locations').value;
 
-    savedLocations.forEach(location => {
-        const option = document.createElement('option');
-        option.value = location;
-        option.textContent = location;
-        select.appendChild(option);
-    });
-}
-
-function updateCurrentLocation() {
-    const currentDiv = document.getElementById('current_location');
-    const selectedLocation = document.getElementById('saved_locations').value;
-
-    if (selectedLocation) {
-        currentDiv.textContent = `Current: ${selectedLocation}`;
-    } else {
-        currentDiv.textContent = 'No location selected';
-    }
-}
+//     if (selectedLocation) {
+//         currentDiv.textContent = `Current: ${selectedLocation}`;
+//     } else {
+//         currentDiv.textContent = 'No location selected';
+//     }
+// }
 
 // Event listeners
-document.getElementById('saved_locations').addEventListener('change', updateCurrentLocation);
+//document.getElementById('saved_locations').addEventListener('change', updateCurrentLocation);
 
 // Modal handling variables
 let currentModal = null;
