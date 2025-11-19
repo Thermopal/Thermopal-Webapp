@@ -464,26 +464,25 @@ function getRestTimeForZone(zone) {
     return restTimes[zone] || 15;
 }
 
+{% if user.end_time %}
 function initializeTimer() {
-    {% if user.end_time and user.zone %}
-        // Initialize timer for any user with an active end time and zone
-        currentEndTime = "{{ user.end_time }}";
+    // Initialize timer from server-rendered values when available
+    currentEndTime = "{{ user.end_time }}";
 
-        // Determine if this is a work or rest cycle based on status
-        {% if user.status == 'resting' %}
-            isWorkCycle = false;
-            document.getElementById('stop-button-container').classList.add('hidden');
-        {% else %}
-            // For 'working' status or 'idle' with work_completed/pending_rest
-            isWorkCycle = true;
-            document.getElementById('stop-button-container').classList.remove('hidden');
-        {% endif %}
-
-        startTimer();
-        updateZoneDisplay("{{ user.zone }}");
-        updateTimeDisplay("{{ user.start_time }}", "{{ user.end_time }}");
+    // Determine if this is a work or rest cycle based on status
+    {% if user.status == 'resting' %}
+        isWorkCycle = false;
+        document.getElementById('stop-button-container').classList.add('hidden');
+    {% else %}
+        isWorkCycle = true;
+        document.getElementById('stop-button-container').classList.remove('hidden');
     {% endif %}
+
+    startTimer();
+    updateZoneDisplay({% if user.zone %}"{{ user.zone }}"{% else %}null{% endif %});
+    updateTimeDisplay("{{ user.start_time }}", "{{ user.end_time }}");
 }
+{% endif %}
 
 function startZone(zone) {
     const location = document.getElementById('address').value;
@@ -543,6 +542,65 @@ function stopCycleEarly() {
             document.getElementById('countdown').textContent = '--:--';
             document.getElementById('stop-button-container').classList.add('hidden');
             updateProgressRing(0, false);
+            //show work complete modal and allow starting of rest cycle immediately
+             const token = document.getElementById('token').value;
+       fetch('/send-notification', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           token: token,
+           title: "🔥 Work Cycle Complete",
+           body: "Please rest now!"
+         })
+       })
+       .then(res => res.json())
+       .then(data => console.log('Response:', data))
+       .catch(err => console.error('Error:', err));
+        // Attempt to show a local modal immediately for UX (non-authoritative).
+        // Compute zone and restTime safely and retry once if workModal isn't ready.
+        (function showLocalWorkModal() {
+            try {
+                // Determine zone: prefer global, fall back to DOM
+                let zone = (window.currentZone && window.currentZone !== 'null') ? window.currentZone : null;
+                if (!zone) {
+                    const zoneEl = document.getElementById('zone_name_display');
+                    if (zoneEl) {
+                        const txt = zoneEl.textContent || '';
+                        zone = txt.replace(/^Zone:\s*/i, '').trim() || null;
+                    }
+                }
+
+                const restTime = getRestTimeForZone(zone);
+
+                const payload = {
+                    title: '🚨 Work Cycle Complete!',
+                    message: `Your ${zone?.toUpperCase() || 'WORK'} zone work cycle has ended. Start your ${restTime} ${zone === 'test' ? 'second' : 'minute'} rest cycle now!`,
+                    username: window.currentUser,
+                    zone: zone,
+                    rest_duration: restTime
+                };
+
+                // If workModal isn't initialized yet, retry shortly
+                if (typeof workModal === 'undefined' || !workModal || typeof workModal.showWorkCompletionModal !== 'function') {
+                    console.warn('workModal not ready yet; retrying to show modal in 500ms');
+                    setTimeout(() => {
+                        if (typeof workModal !== 'undefined' && workModal && typeof workModal.showWorkCompletionModal === 'function') {
+                            try { workModal.showWorkCompletionModal(payload); } catch (e) { console.error('Failed to show workModal on retry', e); }
+                        } else {
+                            console.warn('workModal still unavailable; modal will rely on server/push fallback');
+                        }
+                    }, 500);
+                } else {
+                    try {
+                        workModal.showWorkCompletionModal(payload);
+                    } catch (e) {
+                        console.error('Error showing work completion modal:', e);
+                    }
+                }
+            } catch (e) {
+                console.error('Unexpected error preparing local work completion modal:', e);
+            }
+        })();
         } else {
             alert(data.error || 'Failed to stop cycle');
         }
