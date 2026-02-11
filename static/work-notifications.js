@@ -19,7 +19,7 @@ class WorkCompletionModal {
         this.progressiveReminderInterval = null;
         this.isDismissed = false;
         this.reminderCount = 0;
-        detectMobile(); // Initialize mobile detection
+        // detectMobile(); // Initialize mobile detection
     }
 
     showWorkCompletionModal(data) {
@@ -80,7 +80,7 @@ class WorkCompletionModal {
         if (modal) {
             modal.classList.add('hidden');
         }
-        
+        console.log("Starting rest cycle fetching event")
         // Call the server to start rest cycle
         fetch('/start_rest', {
             method: 'POST',
@@ -295,90 +295,90 @@ class WorkCompletionModal {
     }
 
     // ENHANCED: Immediate work completion check for page refresh scenarios
-    performImmediateWorkCompletionCheck() {
-        console.log('Performing immediate work completion check after page refresh');
+    // performImmediateWorkCompletionCheck() {
+    //     console.log('Performing immediate work completion check after page refresh');
         
-        fetch(`/get_user_state/${window.currentUser}`)
-            .then(response => response.json())
-            .then(data => {
-                console.log('Immediate check - user state:', data);
+    //     fetch(`/get_user_state/${window.currentUser}`)
+    //         .then(response => response.json())
+    //         .then(data => {
+    //             console.log('Immediate check - user state:', data);
                 
-                if (data.work_completed && data.pending_rest) {
-                    console.log('FOUND PENDING WORK COMPLETION - Auto-showing modal after page refresh');
+    //             if (data.work_completed && data.pending_rest) {
+    //                 console.log('FOUND PENDING WORK COMPLETION - Auto-showing modal after page refresh');
                     
-                    // Use most stringent zone for rest calculation, fallback to current zone
-                    const zoneForRest = data.most_stringent_zone || data.zone;
-                    const restTime = this.getCorrectRestTime(zoneForRest);
-                    console.log(`REST CALCULATION: Current zone: ${data.zone}, Most stringent: ${data.most_stringent_zone}, Using: ${zoneForRest}, Rest time: ${restTime}`);
+    //                 // Use most stringent zone for rest calculation, fallback to current zone
+    //                 const zoneForRest = data.most_stringent_zone || data.zone;
+    //                 const restTime = this.getCorrectRestTime(zoneForRest);
+    //                 console.log(`REST CALCULATION: Current zone: ${data.zone}, Most stringent: ${data.most_stringent_zone}, Using: ${zoneForRest}, Rest time: ${restTime}`);
                     
-                    // Show modal immediately with enhanced visibility
-                    this.showWorkCompletionModal({
-                        title: '⚠️ WORK CYCLE COMPLETE! ⚠️',
-                        message: `Your work cycle has ended. Time to start rest cycle!`,
-                        username: window.currentUser,
-                        zone: data.zone,
-                        most_stringent_zone: zoneForRest,
-                        rest_duration: restTime
-                    });
+    //                 // Show modal immediately with enhanced visibility
+    //                 this.showWorkCompletionModal({
+    //                     title: '⚠️ WORK CYCLE COMPLETE! ⚠️',
+    //                     message: `Your work cycle has ended. Time to start rest cycle!`,
+    //                     username: window.currentUser,
+    //                     zone: data.zone,
+    //                     most_stringent_zone: zoneForRest,
+    //                     rest_duration: restTime
+    //                 });
                     
-                    // Disable zone buttons immediately to prevent new work cycles
-                    this.disableZoneButtons();
+    //                 // Disable zone buttons immediately to prevent new work cycles
+    //                 this.disableZoneButtons();
                     
-                    // Play enhanced alert for page refresh scenarios
-                    this.playEnhancedAlertSound();
+    //                 // Play enhanced alert for page refresh scenarios
+    //                 this.playEnhancedAlertSound();
                     
-                    // Enhanced mobile vibration for attention
-                    if (isMobile && 'vibrate' in navigator) {
-                        navigator.vibrate([1000, 300, 1000, 300, 1000, 300, 1500]);
-                    }
+    //                 // Enhanced mobile vibration for attention
+    //                 if (isMobile && 'vibrate' in navigator) {
+    //                     navigator.vibrate([1000, 300, 1000, 300, 1000, 300, 1500]);
+    //                 }
 
-                    // PRODUCTION FIX: Force browser notification as secondary measure
-                    this.showProductionNotification(data, restTime, zoneForRest);
-                }
-            })
-            .catch(error => {
-                console.error('Error in immediate work completion check:', error);
-            });
-    }
+    //                 // PRODUCTION FIX: Force browser notification as secondary measure
+    //                 this.showProductionNotification(data, restTime, zoneForRest);
+    //             }
+    //         })
+    //         .catch(error => {
+    //             console.error('Error in immediate work completion check:', error);
+    //         });
+    // }
 
     // Production notification system - works without service workers
-    showProductionNotification(data, restTime, zoneForRest) {
-        console.log('Showing production notification for Chrome on Render');
+    // showProductionNotification(data, restTime, zoneForRest) {
+    //     console.log('Showing production notification for Chrome on Render');
         
-        if (!('Notification' in window)) {
-            console.log('Notification API not available');
-            return;
-        }
+    //     if (!('Notification' in window)) {
+    //         console.log('Notification API not available');
+    //         return;
+    //     }
 
-        // Check permission and show notification immediately
-        if (Notification.permission === 'granted') {
-            try {
-                const notification = new Notification('Work Cycle Complete!', {
-                    body: `Your work cycle has ended. Time to start rest cycle!`,
-                    icon: '/static/icon-192.png',
-                    tag: 'wbgt-production-notification',
-                    requireInteraction: true,
-                    silent: false
-                });
+    //     // Check permission and show notification immediately
+    //     if (Notification.permission === 'granted') {
+    //         try {
+    //             const notification = new Notification('Work Cycle Complete!', {
+    //                 body: `Your work cycle has ended. Time to start rest cycle!`,
+    //                 icon: '/static/icon-192.png',
+    //                 tag: 'wbgt-production-notification',
+    //                 requireInteraction: true,
+    //                 silent: false
+    //             });
 
-                notification.onclick = () => {
-                    window.focus();
-                    notification.close();
-                };
+    //             notification.onclick = () => {
+    //                 window.focus();
+    //                 notification.close();
+    //             };
 
-                console.log('Production notification shown successfully');
-            } catch (error) {
-                console.error('Production notification failed:', error);
-            }
-        } else if (Notification.permission === 'default') {
-            // Request permission and then show notification
-            Notification.requestPermission().then(permission => {
-                if (permission === 'granted') {
-                    this.showProductionNotification(data, restTime);
-                }
-            });
-        }
-    }
+    //             console.log('Production notification shown successfully');
+    //         } catch (error) {
+    //             console.error('Production notification failed:', error);
+    //         }
+    //     } else if (Notification.permission === 'default') {
+    //         // Request permission and then show notification
+    //         Notification.requestPermission().then(permission => {
+    //             if (permission === 'granted') {
+    //                 this.showProductionNotification(data, restTime);
+    //             }
+    //         });
+    //     }
+    // }
 
     // ENHANCED: Enhanced alert sound for critical notifications  
     playEnhancedAlertSound() {
@@ -407,7 +407,7 @@ class WorkCompletionModal {
 
         // ENHANCED: First, always check server state immediately for pending work completion
         // This ensures users see notifications even on fresh page loads
-        this.performImmediateWorkCompletionCheck();
+        // this.performImmediateWorkCompletionCheck();
 
         // Check localStorage for dismissed notifications that need progressive reminders
         const dismissedData = localStorage.getItem('workCompletionDismissed');

@@ -2,7 +2,9 @@
 
 {% block head %}
 <!-- Enhanced Universal Notification System - Works for all WBGT zones and persists across page navigation -->
-<script src="/static/enhanced-notifications.js"></script>
+<!-- <script src="/static/enhanced-notifications.js"></script> -->
+ <script src="/static/work-notifications.js"></script>
+ <script type="module" src="{{ url_for('static', filename='firebase-notifications.js') }}"></script>
 
 {% endblock %}
 
@@ -16,6 +18,7 @@
           <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             WBGT Tracker
           </h1>
+            <input type="text" id="token" style="width:100%;" placeholder="Token will appear here" class="hidden">
           <p class="text-sm text-gray-500 mt-1">Real-time work cycle monitoring</p>
         </div>
 
@@ -72,7 +75,7 @@
             </div>
 
             <!-- Stop Button and Clear Interface -->
-            <div id="stop-button-container" class="hidden">
+            <div id="stop-button-container" class="hidden mb-4">
               <button id="stop-cycle-button" onclick="stopCycleEarly()" class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 mr-2">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -83,10 +86,12 @@
             </div>
 
             <!-- Remarks section from conducting -->
-            <div class="relative w-48 h-48 mx-auto mb-4">
-            <div id="conducting-remarks"></div>
+            <div class="space-y-6">
+             <div class="relative w-90 h-auto mx-auto mb-4 bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-xl">
+                <h2>Conducting Remarks:</h2>
+             <div id="conducting-remarks"></div>
+             </div>
             </div>
-
           </div>
         </div>
       </div>
@@ -94,7 +99,7 @@
       <!-- Location Management -->
       <div class="space-y-6">
         <div class="bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-xl p-4">
-          <h3 class="text-base font-semibold text-gray-900 mb-3 flex items-center">
+          <!-- <h3 class="text-base font-semibold text-gray-900 mb-3 flex items-center">
             <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -115,7 +120,10 @@
               <option value="">Select saved location</option>
             </select>
             <div id="current_location" class="text-xs text-gray-600 bg-gray-50/80 p-2 rounded-md border border-gray-200"></div>
-          </div>
+          </div> -->
+        <h2>Your Current Location:</h2>
+        <p id="coords">Fetching...</p>
+        <p id="address"></p>
         </div>
         
       </div>
@@ -205,7 +213,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
               </svg>
             </div>
-            <p class="text-purple-100 text-sm mb-1">Work: 30 secs · Rest: 30 secs</p>
+            <p class="text-purple-100 text-sm mb-1">Work: 5 secs · Rest: 5 secs</p>
             <p class="text-xs text-purple-200">Test Only</p>
           </div>
           <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
@@ -271,12 +279,45 @@ function getRestTimeForZone(zone) {
       'yellow': 15,
       'red': 30,
       'black': 30,
-      'test': 30/60
+      'test': 15
     };
     return restTimes[zone] || 15;
 }</script>
 
 <script>
+// Run this when the page loads
+    window.onload = async function() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(successCallback, errorCallback);
+      } else {
+        document.getElementById('coords').innerText = "Geolocation not supported.";
+      }
+    }
+
+    async function successCallback(position) {
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+
+      // Display raw coordinates
+      document.getElementById('coords').innerText = `Latitude: ${lat}, Longitude: ${lon}`;
+
+      try {
+        // Use OpenStreetMap's free reverse geocoding
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+        const data = await response.json();
+
+        const locationName = data.display_name;
+        document.getElementById('address').innerText = `📍 ${locationName}`;
+      } catch (error) {
+        console.error(error);
+        document.getElementById('address').innerText = "Unable to get location name.";
+      }
+    }
+
+    function errorCallback(error) {
+      document.getElementById('coords').innerText = "Location access denied or unavailable.";
+      console.error(error);
+    }
 
 // Timer variables (use window to avoid conflicts)
 let currentEndTime = null;
@@ -329,8 +370,8 @@ function initializeTimer() {
 document.addEventListener('DOMContentLoaded', async function() {
     await synchronizeWithServerTime();
     initializeTimer();
-    loadSavedLocations();
-    updateCurrentLocation();
+//    loadSavedLocations();
+//    updateCurrentLocation();
 
     // restore persisted remarks (fixes disappear-on-refresh)
     restoreRemarksFromLocal();
@@ -404,7 +445,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // PRODUCTION ENHANCEMENT: Start automatic notification checking
     // This ensures notifications work even without page refresh on Render
-    startAutomaticNotificationCheck();
+    //startAutomaticNotificationCheck();
 
     // Update dashboard after initialization
     updateDashboard();
@@ -418,34 +459,33 @@ function getRestTimeForZone(zone) {
         'yellow': 15,
         'red': 30,
         'black': 30,
-        'test': 30/60
+        'test': 15
     };
     return restTimes[zone] || 15;
 }
 
+{% if user.end_time %}
 function initializeTimer() {
-    {% if user.end_time and user.zone %}
-        // Initialize timer for any user with an active end time and zone
-        currentEndTime = "{{ user.end_time }}";
+    // Initialize timer from server-rendered values when available
+    currentEndTime = "{{ user.end_time }}";
 
-        // Determine if this is a work or rest cycle based on status
-        {% if user.status == 'resting' %}
-            isWorkCycle = false;
-            document.getElementById('stop-button-container').classList.add('hidden');
-        {% else %}
-            // For 'working' status or 'idle' with work_completed/pending_rest
-            isWorkCycle = true;
-            document.getElementById('stop-button-container').classList.remove('hidden');
-        {% endif %}
-
-        startTimer();
-        updateZoneDisplay("{{ user.zone }}");
-        updateTimeDisplay("{{ user.start_time }}", "{{ user.end_time }}");
+    // Determine if this is a work or rest cycle based on status
+    {% if user.status == 'resting' %}
+        isWorkCycle = false;
+        document.getElementById('stop-button-container').classList.add('hidden');
+    {% else %}
+        isWorkCycle = true;
+        document.getElementById('stop-button-container').classList.remove('hidden');
     {% endif %}
+
+    startTimer();
+    updateZoneDisplay({% if user.zone %}"{{ user.zone }}"{% else %}null{% endif %});
+    updateTimeDisplay("{{ user.start_time }}", "{{ user.end_time }}");
 }
+{% endif %}
 
 function startZone(zone) {
-    const location = document.getElementById('saved_locations').value || document.getElementById('location_name').value;
+    const location = document.getElementById('address').value;
 
     fetch('/set_zone', {
         method: 'POST',
@@ -502,6 +542,65 @@ function stopCycleEarly() {
             document.getElementById('countdown').textContent = '--:--';
             document.getElementById('stop-button-container').classList.add('hidden');
             updateProgressRing(0, false);
+            //show work complete modal and allow starting of rest cycle immediately
+             const token = document.getElementById('token').value;
+       fetch('/send-notification', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           token: token,
+           title: "🔥 Work Cycle Complete",
+           body: "Please rest now!"
+         })
+       })
+       .then(res => res.json())
+       .then(data => console.log('Response:', data))
+       .catch(err => console.error('Error:', err));
+        // Attempt to show a local modal immediately for UX (non-authoritative).
+        // Compute zone and restTime safely and retry once if workModal isn't ready.
+        (function showLocalWorkModal() {
+            try {
+                // Determine zone: prefer global, fall back to DOM
+                let zone = (window.currentZone && window.currentZone !== 'null') ? window.currentZone : null;
+                if (!zone) {
+                    const zoneEl = document.getElementById('zone_name_display');
+                    if (zoneEl) {
+                        const txt = zoneEl.textContent || '';
+                        zone = txt.replace(/^Zone:\s*/i, '').trim() || null;
+                    }
+                }
+
+                const restTime = getRestTimeForZone(zone);
+
+                const payload = {
+                    title: '🚨 Work Cycle Complete!',
+                    message: `Your ${zone?.toUpperCase() || 'WORK'} zone work cycle has ended. Start your ${restTime} ${zone === 'test' ? 'second' : 'minute'} rest cycle now!`,
+                    username: window.currentUser,
+                    zone: zone,
+                    rest_duration: restTime
+                };
+
+                // If workModal isn't initialized yet, retry shortly
+                if (typeof workModal === 'undefined' || !workModal || typeof workModal.showWorkCompletionModal !== 'function') {
+                    console.warn('workModal not ready yet; retrying to show modal in 500ms');
+                    setTimeout(() => {
+                        if (typeof workModal !== 'undefined' && workModal && typeof workModal.showWorkCompletionModal === 'function') {
+                            try { workModal.showWorkCompletionModal(payload); } catch (e) { console.error('Failed to show workModal on retry', e); }
+                        } else {
+                            console.warn('workModal still unavailable; modal will rely on server/push fallback');
+                        }
+                    }, 500);
+                } else {
+                    try {
+                        workModal.showWorkCompletionModal(payload);
+                    } catch (e) {
+                        console.error('Error showing work completion modal:', e);
+                    }
+                }
+            } catch (e) {
+                console.error('Unexpected error preparing local work completion modal:', e);
+            }
+        })();
         } else {
             alert(data.error || 'Failed to stop cycle');
         }
@@ -543,8 +642,6 @@ function startTimer() {
 
     //this handles when the countdown timer hit 0:00
         if (totalSeconds <= 0) {
-            //test using window alert
-            window.alert("Test print timer have completed");
             clearInterval(window.timerInterval);
             handleTimerComplete();
             return;
@@ -570,9 +667,84 @@ function handleTimerComplete() {
         console.log('Work cycle completed - awaiting rest notification');
         //Now need to know how the rest notification is being triggered.
         // Don't clear the timer display - let Firebase notifications handle the rest prompt
+        //this is done in main.py, backend will check periodically and trigger notification
+        // ✅ When timer ends, trigger a custom event for the notification JS
+        // window.dispatchEvent(new Event('work-cycle-timer-finished'));
+       const token = document.getElementById('token').value;
+       fetch('/send-notification', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           token: token,
+           title: "🔥 Work Cycle Complete",
+           body: "Please rest now!"
+         })
+       })
+       .then(res => res.json())
+       .then(data => console.log('Response:', data))
+       .catch(err => console.error('Error:', err));
+        // Attempt to show a local modal immediately for UX (non-authoritative).
+        // Compute zone and restTime safely and retry once if workModal isn't ready.
+        (function showLocalWorkModal() {
+            try {
+                // Determine zone: prefer global, fall back to DOM
+                let zone = (window.currentZone && window.currentZone !== 'null') ? window.currentZone : null;
+                if (!zone) {
+                    const zoneEl = document.getElementById('zone_name_display');
+                    if (zoneEl) {
+                        const txt = zoneEl.textContent || '';
+                        zone = txt.replace(/^Zone:\s*/i, '').trim() || null;
+                    }
+                }
+
+                const restTime = getRestTimeForZone(zone);
+
+                const payload = {
+                    title: '🚨 Work Cycle Complete!',
+                    message: `Your ${zone?.toUpperCase() || 'WORK'} zone work cycle has ended. Start your ${restTime} ${zone === 'test' ? 'second' : 'minute'} rest cycle now!`,
+                    username: window.currentUser,
+                    zone: zone,
+                    rest_duration: restTime
+                };
+
+                // If workModal isn't initialized yet, retry shortly
+                if (typeof workModal === 'undefined' || !workModal || typeof workModal.showWorkCompletionModal !== 'function') {
+                    console.warn('workModal not ready yet; retrying to show modal in 500ms');
+                    setTimeout(() => {
+                        if (typeof workModal !== 'undefined' && workModal && typeof workModal.showWorkCompletionModal === 'function') {
+                            try { workModal.showWorkCompletionModal(payload); } catch (e) { console.error('Failed to show workModal on retry', e); }
+                        } else {
+                            console.warn('workModal still unavailable; modal will rely on server/push fallback');
+                        }
+                    }, 500);
+                } else {
+                    try {
+                        workModal.showWorkCompletionModal(payload);
+                    } catch (e) {
+                        console.error('Error showing work completion modal:', e);
+                    }
+                }
+            } catch (e) {
+                console.error('Unexpected error preparing local work completion modal:', e);
+            }
+        })();
     } else {
         // Rest cycle completed
         console.log('Rest cycle completed! Ready for next work cycle.');
+               const token = document.getElementById('token').value;
+         fetch('/send-notification', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           token: token,
+           title: "🔥 Rest Cycle Complete",
+           body: "Congratualation for the completion!"
+         })
+       })
+       .then(res => res.json())
+       .then(data => console.log('Response:', data))
+       .catch(err => console.error('Error:', err));
+
         currentEndTime = null;
         isWorkCycle = false;
         document.getElementById('zone_name_display').textContent = '';
@@ -613,6 +785,8 @@ function updateProgressRing(timeLeft, isWork) {
 
 function updateZoneDisplay(zone) {
     const zoneDisplay = document.getElementById('zone_name_display');
+    // expose current zone globally so other code (timer completion) can access it
+    try { window.currentZone = zone; } catch (e) { /* ignore */ }
     if (zoneDisplay) {
         if (zone === 'Mandatory Rest') {
             zoneDisplay.textContent = 'Mandatory Rest Period';
@@ -629,9 +803,9 @@ function updateRemarksDisplay(remarks) {
     if (!remarksDisplay) return;
 
     if (remarks && remarks !== 'null') {
-        remarksDisplay.textContent = "Conducting Instruction: " + remarks;
+        remarksDisplay.textContent = remarks;
     } else {
-        remarksDisplay.textContent = "Conducting Instruction: ";
+        remarksDisplay.textContent = "NIL";
     }
 }
 
@@ -673,50 +847,50 @@ function updateTimeDisplay(startTime, endTime) {
 }
 
 // Location management
-function saveCurrentLocation() {
-    const locationName = document.getElementById('location_name').value.trim();
-    if (!locationName) return;
+//function saveCurrentLocation() {
+//    const locationName = document.getElementById('location_name').value.trim();
+//    if (!locationName) return;
+//
+//    let savedLocations = JSON.parse(localStorage.getItem('savedLocations') || '[]');
+//    if (!savedLocations.includes(locationName)) {
+//        savedLocations.push(locationName);
+//        localStorage.setItem('savedLocations', JSON.stringify(savedLocations));
+//        loadSavedLocations();
+//    }
+//
+//    document.getElementById('location_name').value = '';
+//}
 
-    let savedLocations = JSON.parse(localStorage.getItem('savedLocations') || '[]');
-    if (!savedLocations.includes(locationName)) {
-        savedLocations.push(locationName);
-        localStorage.setItem('savedLocations', JSON.stringify(savedLocations));
-        loadSavedLocations();
-    }
+//function loadSavedLocations() {
+//     const savedLocations = JSON.parse(localStorage.getItem('savedLocations') || '[]');
+//     const select = document.getElementById('saved_locations');
 
-    document.getElementById('location_name').value = '';
-}
+//     // Clear existing options except first
+//     while (select.children.length > 1) {
+//         select.removeChild(select.lastChild);
+//     }
 
-function loadSavedLocations() {
-    const savedLocations = JSON.parse(localStorage.getItem('savedLocations') || '[]');
-    const select = document.getElementById('saved_locations');
+//     savedLocations.forEach(location => {
+//         const option = document.createElement('option');
+//         option.value = location;
+//         option.textContent = location;
+//         select.appendChild(option);
+//     });
+// }
 
-    // Clear existing options except first
-    while (select.children.length > 1) {
-        select.removeChild(select.lastChild);
-    }
+// function updateCurrentLocation() {
+//     const currentDiv = document.getElementById('current_location');
+//     const selectedLocation = document.getElementById('saved_locations').value;
 
-    savedLocations.forEach(location => {
-        const option = document.createElement('option');
-        option.value = location;
-        option.textContent = location;
-        select.appendChild(option);
-    });
-}
-
-function updateCurrentLocation() {
-    const currentDiv = document.getElementById('current_location');
-    const selectedLocation = document.getElementById('saved_locations').value;
-
-    if (selectedLocation) {
-        currentDiv.textContent = `Current: ${selectedLocation}`;
-    } else {
-        currentDiv.textContent = 'No location selected';
-    }
-}
+//     if (selectedLocation) {
+//         currentDiv.textContent = `Current: ${selectedLocation}`;
+//     } else {
+//         currentDiv.textContent = 'No location selected';
+//     }
+// }
 
 // Event listeners
-document.getElementById('saved_locations').addEventListener('change', updateCurrentLocation);
+//document.getElementById('saved_locations').addEventListener('change', updateCurrentLocation);
 
 // Modal handling variables
 let currentModal = null;
@@ -764,9 +938,23 @@ socket.on('conducting_remarks', function(data){
     if (data.user === window.currentUser) {
         // set the remarks in UI
         updateRemarksDisplay(data.remarks);
+        //send a notification to user about the new remarks
+        const token = document.getElementById('token').value;
+         fetch('/send-notification', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           token: token,
+           title: "🔥 Instructions from conducting",
+           body: data.remarks
+         })
+       })
+       .then(res => res.json())
+       .then(data => console.log('Response:', data))
+       .catch(err => console.error('Error:', err));
         // persist for page refresh
         saveRemarksToLocal(data.remarks);
-        //send a notification to user about the new remarks
+        
         
     }
 })
@@ -916,6 +1104,7 @@ function updateDashboard() {
                 saveRemarksToLocal(null); // clear stored remarks if none
             }
 
+            console.log("Printnttntnt: page refresh ---- checking dashboard update");
             if (data.end_time && data.zone) {
                 // User has an active timer (working, resting)
                 currentEndTime = data.end_time;
@@ -961,137 +1150,21 @@ function updateDashboard() {
 
 // PRODUCTION ENHANCEMENT: Automatic notification checking system
 // This runs continuously and shows notifications even without page refresh
-let automaticNotificationInterval = null;
-let lastNotificationCheck = null;
+
 
 
 //===================================================================================
 //Notification related functions
 //===================================================================================
-function startAutomaticNotificationCheck() {
-    console.log('Starting automatic notification check system for production');
-    
-    // Clear any existing interval
-    if (automaticNotificationInterval) {
-        clearInterval(automaticNotificationInterval);
-    }
-    
-    // Check every 3 seconds for work completion
-    automaticNotificationInterval = setInterval(() => {
-        checkForAutomaticNotification();
-    }, 3000);
-}
 
-function checkForAutomaticNotification() {
-    if (!window.currentUser) return;
-    
-    fetch(`/get_user_state/${window.currentUser}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.work_completed && data.pending_rest) {
-                const workEndTime = new Date(data.end_time).getTime();
-                
-                // Only show notification if this is a new work completion
-                if (lastNotificationCheck !== workEndTime) {
-                    console.log('Automatic notification: New work completion detected');
-                    lastNotificationCheck = workEndTime;
-                    
-                    // Show production notification immediately
-                    showAutomaticProductionNotification(data);
-                    
-                    // Also trigger the modal system
-                    if (typeof workModal !== 'undefined') {
-                        const restTime = getRestTimeForZone(data.zone);
-                        workModal.showWorkCompletionModal({
-                            title: '🚨 Work Cycle Complete!',
-                            message: `Your ${data.zone?.toUpperCase() || 'WORK'} zone work cycle has ended. Start your ${restTime} ${data.zone === 'test' ? 'second' : 'minute'} rest cycle now!`,
-                            username: window.currentUser,
-                            zone: data.zone,
-                            rest_duration: restTime
-                        });
-                    }
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error in automatic notification check:', error);
-        });
-}
 
-function showAutomaticProductionNotification(data) {
-    console.log('Showing automatic production notification for work completion');
-    
-    if (!('Notification' in window) || Notification.permission !== 'granted') {
-        console.log('Cannot show automatic notification - not supported or no permission');
-        return;
-    }
-    
-    const restTime = getRestTimeForZone(data.zone);
-    const timeUnit = data.zone === 'test' ? 'second' : 'minute';
-    
-    try {
-        const notification = new Notification('🚨 Work Cycle Complete!', {
-            body: `Your ${data.zone?.toUpperCase() || 'WORK'} zone work cycle has ended. Start your ${restTime} ${timeUnit} rest cycle now!`,
-            icon: '/static/icon-192.png',
-            tag: 'wbgt-auto-notification-' + Date.now(),
-            requireInteraction: true,
-            silent: false
-        });
 
-        notification.onclick = () => {
-            window.focus();
-            notification.close();
-        };
 
-        // Auto-remind after 15 seconds if user doesn't respond
-        setTimeout(() => {
-            if (notification) {
-                notification.close();
-                showAutomaticReminderNotification(data, restTime, timeUnit);
-            }
-        }, 15000);
 
-        console.log('Automatic production notification shown');
-    } catch (error) {
-        console.error('Failed to show automatic production notification:', error);
-    }
-}
 
-function showAutomaticReminderNotification(data, restTime, timeUnit) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') {
-        return;
-    }
-    
-    try {
-        const reminderNotification = new Notification('⚠️ Rest Reminder', {
-            body: `Don't forget: You need to start your rest cycle!`,
-            icon: '/static/icon-192.png',
-            tag: 'wbgt-auto-reminder-' + Date.now(),
-            requireInteraction: true,
-            silent: false
-        });
-
-        reminderNotification.onclick = () => {
-            window.focus();
-            reminderNotification.close();
-        };
-
-        console.log('Automatic reminder notification shown');
-    } catch (error) {
-        console.error('Failed to show automatic reminder notification:', error);
-    }
-}
-
-function stopAutomaticNotificationCheck() {
-    if (automaticNotificationInterval) {
-        clearInterval(automaticNotificationInterval);
-        automaticNotificationInterval = null;
-        console.log('Automatic notification checking stopped');
-    }
-}
 
 // Make updateDashboard globally available
 window.updateDashboard = updateDashboard;</script>
-<script src="/static/main.js"></script>
-<script src="/static/work-notifications.js"></script>
+ <!-- <script src="/static/main.js"></script> -->
+<!--<script src="/static/work-notifications.js"></script> -->
 {% endblock %}

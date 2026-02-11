@@ -2,6 +2,8 @@
 import eventlet
 eventlet.monkey_patch()
 
+import firebase_admin
+from firebase_admin import credentials, messaging
 import os
 import logging
 import time
@@ -30,15 +32,19 @@ logging.basicConfig(
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
 
-# # ✅ This makes your firebase service worker available at /firebase-messaging-sw.js
-# @app.route('/firebase-messaging-sw.js')
-# def service_worker():
-#     return send_from_directory('static', 'firebase-messaging-sw.js')
+# # production firebase
+# # Load JSON from environment variable
+firebase_key = os.environ.get("FIREBASE_CREDENTIALS_JSON")
+cred = credentials.Certificate(json.loads(firebase_key))
 
-# @app.route('/chrome-sw.js')
-# def chrome_service_worker():
-#     return send_from_directory('static', 'chrome-sw.js')
+# Initialize Firebase Admin SDK
+firebase_admin.initialize_app(cred)
 
+
+# lcoal testing firebase
+# Initialize Firebase Admin
+# cred = credentials.Certificate("firebase-key.json")
+# firebase_admin.initialize_app(cred)
 
 # ----------------------------
 # Configure database with optimizations
@@ -58,7 +64,8 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 }
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Initialize extensions with production-ready settings
+# Initialize extensions with production-ready settings very important, flask and socketio in local is working single thread,
+#  in production it needs eventlet and guinorn for socket and flask work async and properyl
 socketio = SocketIO(app, async_mode='eventlet', ping_timeout=60, ping_interval=25, 
                     logger=False, engineio_logger=False, cors_allowed_origins="*",
                     transports=['websocket', 'polling'])
@@ -134,7 +141,7 @@ WBGT_ZONES = {
     "yellow": {"work": 30, "rest": 15},
     "red": {"work": 30, "rest": 30},
     "black": {"work": 15, "rest": 30},
-    "test": {"work": 30/60, "rest": 30/60},  # 30 seconds work, 30 seconds rest
+    "test": {"work": 5/60, "rest": 5/60},  # 5 seconds work, 5 seconds rest
     "cut-off": {"work": 0, "rest": 30}
 }
 
@@ -160,6 +167,23 @@ CACHE_TIMEOUT = 30  # seconds
 
 # Background task control
 background_task_started = False
+
+# ✅ Function to send FCM notification
+def send_fcm_notification(token, title, body):
+    try:
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title=title,
+                body=body
+            ),
+            token=token
+        )
+        response = messaging.send(message)
+        print("✅ Notification sent successfully:", response)
+        return True
+    except Exception as e:
+        print("❌ Error sending notification:", e)
+        return False
 
 def get_cached_user(user_id):
     """Get user from cache or database"""
@@ -232,8 +256,7 @@ def emit_user_update(conduct_id, user):
             'end_time': user.end_time,
             'work_completed': user.work_completed,
             'pending_rest': user.pending_rest,
-            'role': user.role,
-            'remarks': user.remarks
+            'role': user.role
         }, room=f'conduct_{conduct_id}')
         print(f"Emitted user update for {user.name} to conduct room {conduct_id}")
     except Exception as e:
@@ -329,24 +352,24 @@ def get_recent_history(conduct_id, limit=None):
         'details': log.details
     } for log in logs]
 
-def show_work_complete_modal(username, zone):
-    """Send work complete modal notification to specific user"""
-    rest_duration = WBGT_ZONES.get(zone, {}).get('rest', 15)
+# def show_work_complete_modal(username, zone):
+#     """Send work complete modal notification to specific user"""
+#     rest_duration = WBGT_ZONES.get(zone, {}).get('rest', 15)
 
-    # Create notification data
-    notification_data = {
-        'username': username,
-        'zone': zone,
-        'rest_duration': rest_duration,
-        'title': 'Work Cycle Complete!',
-        'message': 'Your work cycle has ended. Time to start rest cycle!'
-    }
+#     # Create notification data
+#     notification_data = {
+#         'username': username,
+#         'zone': zone,
+#         'rest_duration': rest_duration,
+#         'title': 'Work Cycle Complete!',
+#         'message': 'Your work cycle has ended. Time to start rest cycle!'
+#     }
 
-    # Emit to specific user
-    socketio.emit('show_work_complete_modal', notification_data)
+#     # Emit to specific user
+#     socketio.emit('show_work_complete_modal', notification_data)
 
-    print(f"Work complete modal shown for {username} in {zone} zone")
-    return True
+#     print(f"Work complete modal shown for {username} in {zone} zone")
+#     return True
 
 def check_conduct_activity():
     """Background task to check for conducts that should be deactivated after 24 hours with no users"""
@@ -391,6 +414,7 @@ def check_conduct_activity():
             db.session.rollback()
 
 # Background task to check for work cycle completions
+# Breaking this to 2 backend API (work_complete API and rest_complete API)
 def check_user_cycles():
     """Background task to check for completed work cycles and trigger notifications"""
     with app.app_context():  # CRITICAL: Add application context
@@ -446,7 +470,7 @@ def check_user_cycles():
                         emit_user_update(user.conduct_id, user)
 
                         # Show work complete modal
-                        show_work_complete_modal(user.name, user.zone)
+                        # show_work_complete_modal(user.name, user.zone)
 
                         # Also emit work cycle completed event for enhanced notification handling
                         socketio.emit('work_cycle_completed', {
@@ -632,10 +656,34 @@ def check_user_cycles():
 
 # Routes (keeping all existing routes unchanged...)
 
+# ✅ Route to trigger notification
+@app.route('/send-notification', methods=['POST'])
+def send_notification():
+    data = request.json
+    token = data.get('token')
+    # print the token to see
+    print(f"Token received: {token}")
+    title = data.get('title', 'Notification')
+    body = data.get('body', 'You have a new message.')
+
+    if not token:
+        return jsonify({'error': 'Missing token'}), 400
+
+    success = send_fcm_notification(token, title, body)
+    if success:
+        return jsonify({'message': 'Notification sent successfully'}), 200
+    else:
+        return jsonify({'error': 'Failed to send notification'}), 500
+
+
 @app.route('/')
 def index():
     """Page 1: Home - Conduct Access & Management"""
     return render_template('index_new.html')
+
+@app.route('/firebase-messaging-sw.js')
+def service_worker():
+    return app.send_static_file('firebase-messaging-sw.js')
 
 # New Battalion-Company Structure Routes
 # API to create new conduct 
@@ -788,6 +836,29 @@ def view_conducts_new():
         flash(f'Error loading battalion overview: {str(e)}', 'error')
         return redirect(url_for('index'))
 
+@app.route('/battalion_overview/<int:battalion_id>')
+def battalion_overview(battalion_id):
+    try:
+        battalion = Battalion.query.get_or_404(battalion_id)
+        companies = Company.query.filter_by(battalion_id=battalion_id).order_by(Company.name).all()
+        
+        # Calculate statistics
+        total_conducts = 0
+        active_conducts = 0
+        
+        for company in companies:
+            total_conducts += len(company.conducts)
+            active_conducts += len([c for c in company.conducts if c.status == 'active'])
+
+        return render_template('battalion_overview.html',
+                             battalion=battalion,
+                             company_data=companies,
+                             total_conducts=total_conducts,
+                             active_conducts=active_conducts)
+    except Exception as e:
+        flash(f'Error loading battalion overview: {str(e)}', 'error')
+        return redirect(url_for('index'))
+    
 # API to retrieve all company conduct via company ID
 @app.route('/company_conducts/<int:company_id>')
 def company_conducts(company_id):
@@ -1017,7 +1088,8 @@ def user_setup(conduct_id):
             if existing_user:
                 # Update existing user
                 existing_user.role = role
-                existing_user.status = 'idle' if role == 'trainer' else 'monitoring'
+                if(existing_user.status not in ['working', 'resting']):
+                   existing_user.status = 'idle' if role == 'trainer' else 'monitoring'
                 db.session.commit()
                 user = existing_user
             else:
@@ -1442,15 +1514,16 @@ def start_rest():
         print(f"STRINGENCY DEBUG: User {user.name} - Current zone: {user.zone}, Most stringent: {user.most_stringent_zone}, Rest duration: {rest_duration} min")
 
         # Handle test cycle differently (seconds vs minutes)
-        if user.zone == 'test':
-            end_time = now + timedelta(seconds=rest_duration)
-        else:
-            end_time = now + timedelta(minutes=rest_duration)
+        # if user.zone == 'test':
+        #     end_time = now + timedelta(seconds=rest_duration)
+        # else:
+        end_time = now + timedelta(minutes=rest_duration)
 
         # Store times with exact precision to ensure accurate duration tracking
         start_time_str = now.strftime('%H:%M:%S')
         end_time_str = end_time.strftime('%H:%M:%S')
-
+        
+        print(f"TIMING DEBUG: Calculated rest end time for user {user.name} - Now: {start_time_str}, End: {end_time_str}, duration: {rest_duration}min")
         user.status = 'resting'
         user.start_time = start_time_str
         user.end_time = end_time_str
@@ -1470,7 +1543,7 @@ def start_rest():
         # Log activity with enhanced details showing stringent zone logic
         if zone_for_rest == 'test':
             # Convert minutes to seconds for test zone display (0.1667 min = 10 sec)
-            rest_seconds = int(rest_duration * 60)
+            rest_seconds = int(rest_duration*60)
             log_activity(user.conduct_id, user.name, 'start_rest', user.zone, 
                         f"Started {rest_seconds} second rest period (based on most stringent zone: {zone_for_rest})")
         else:
@@ -1479,6 +1552,7 @@ def start_rest():
             log_activity(user.conduct_id, user.name, 'start_rest', user.zone, 
                         f"Started {rest_minutes} minute rest period (based on most stringent zone: {zone_for_rest})")
 
+        print(f"Updating user details")
         # CRITICAL: Emit user update to all clients in conduct room
         emit_user_update(user.conduct_id, user)
 
@@ -1929,7 +2003,7 @@ def force_work_completion_check(username):
 
         if user.work_completed and user.pending_rest and user.zone:
             # Show work complete modal
-            show_work_complete_modal(user.name, user.zone)
+            # show_work_complete_modal(user.name, user.zone)
             
             # Emit work cycle completed event
             socketio.emit('work_cycle_completed', {
@@ -1957,7 +2031,7 @@ def handle_connect():
     # Start background task when first client connects
     global background_task_started
     if not background_task_started:
-        start_background_tasks()
+        # start_background_tasks()
         background_task_started = True
 
 @socketio.on('disconnect')
@@ -2108,6 +2182,8 @@ if __name__ == '__main__':
     # Start background tasks
     start_background_tasks()
     background_task_started = True
+
+    print("SocketIO async mode:", socketio.async_mode)
 
     # Use SocketIO's built-in server instead of Gunicorn for better WebSocket support
     socketio.run(app, host='0.0.0.0', port=5000, debug=False, use_reloader=False, 

@@ -20,5 +20,8 @@ email-validator>=2.2.0
 pytz>=2025.2
 requests
 
+# Firebase Admin SDK
+firebase-admin>=7.1.0
+
 # Additional Dependencies from original requirements.txt
 # (All unique packages from your original file are included above with proper versioning)

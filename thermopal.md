@@ -91,3 +91,10 @@ The application implements a redundant notification strategy ensuring compatibil
 - Technical communication style preferred for system analysis
 - Comprehensive documentation of all system components
 - Focus on safety-critical aspects of WBGT monitoring
+
+## Local Setup
+- python -m venv venv
+- .\venv\Scripts\activate
+- pip install -r requirements.txt
+- pip install python-dotenv
+- flask --app main run --debug
