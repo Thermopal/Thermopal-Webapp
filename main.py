@@ -1,4 +1,3 @@
-
 import eventlet
 eventlet.monkey_patch()
 
@@ -6,14 +5,11 @@ import firebase_admin
 from firebase_admin import credentials, messaging
 import os
 import logging
-import time
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from datetime import datetime, timedelta
 import pytz
 import json
-import random
-import string
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, Unit, Battalion, Company, Conduct, User, Session, ActivityLog
 
@@ -34,17 +30,17 @@ app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
 
 # # production firebase
 # # Load JSON from environment variable
-firebase_key = os.environ.get("FIREBASE_CREDENTIALS_JSON")
-cred = credentials.Certificate(json.loads(firebase_key))
+# firebase_key = os.environ.get("FIREBASE_CREDENTIALS_JSON")
+# cred = credentials.Certificate(json.loads(firebase_key))
 
 # Initialize Firebase Admin SDK
-firebase_admin.initialize_app(cred)
+# firebase_admin.initialize_app(cred)
 
 
 # lcoal testing firebase
 # Initialize Firebase Admin
-# cred = credentials.Certificate("firebase-key.json")
-# firebase_admin.initialize_app(cred)
+cred = credentials.Certificate("firebase-key.json")
+firebase_admin.initialize_app(cred)
 
 # ----------------------------
 # Configure database with optimizations
@@ -473,12 +469,12 @@ def check_user_cycles():
                         # show_work_complete_modal(user.name, user.zone)
 
                         # Also emit work cycle completed event for enhanced notification handling
-                        socketio.emit('work_cycle_completed', {
-                            'username': user.name,
-                            'zone': user.zone,
-                            'rest_time': WBGT_ZONES.get(user.zone, {}).get('rest', 15),
-                            'action': 'work_cycle_completed'
-                        }, room=f'conduct_{user.conduct_id}')
+                        # socketio.emit('work_cycle_completed', {
+                        #     'username': user.name,
+                        #     'zone': user.zone,
+                        #     'rest_time': WBGT_ZONES.get(user.zone, {}).get('rest', 15),
+                        #     'action': 'work_cycle_completed'
+                        # }, room=f'conduct_{user.conduct_id}')
 
                         print(f"Work completion notification sent for {user.name}")
 
@@ -1473,7 +1469,7 @@ def stop_cycle():
         user.zone = None
         user.start_time = None
         user.end_time = None
-        user.work_completed = False
+        user.work_completed = True
         user.pending_rest = False
 
         db.session.commit()
