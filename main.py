@@ -30,17 +30,17 @@ app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
 
 # # production firebase
 # # Load JSON from environment variable
-# firebase_key = os.environ.get("FIREBASE_CREDENTIALS_JSON")
-# cred = credentials.Certificate(json.loads(firebase_key))
+firebase_key = os.environ.get("FIREBASE_CREDENTIALS_JSON")
+cred = credentials.Certificate(json.loads(firebase_key))
 
 # Initialize Firebase Admin SDK
-# firebase_admin.initialize_app(cred)
+firebase_admin.initialize_app(cred)
 
 
 # lcoal testing firebase
 # Initialize Firebase Admin
-cred = credentials.Certificate("firebase-key.json")
-firebase_admin.initialize_app(cred)
+# cred = credentials.Certificate("firebase-key.json")
+# firebase_admin.initialize_app(cred)
 
 # ----------------------------
 # Configure database with optimizations
