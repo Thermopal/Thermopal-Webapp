@@ -1255,6 +1255,151 @@ def set_remarks():
     
                 
 # route to set zone for selected user 
+# @app.route('/set_zone', methods=['POST'])
+# def set_zone():
+#     """Set WBGT zone for a user"""
+#     user_id = request.form.get('user_id')
+#     target_user_name = request.form.get('target_user')
+#     zone = request.form.get('zone')
+#     location = request.form.get('location')
+#     remarks = request.form.get('remarks')
+
+#     # If no target user specified, use current user
+#     if not target_user_name:
+#         current_user = User.query.get(user_id)
+#         if current_user:
+#             target_user_name = current_user.name
+
+#     try:
+#         user = User.query.get(user_id)
+#         if not user:
+#             return jsonify({"error": "User not found"}), 404
+
+#         conduct_id = user.conduct_id
+#         system_status = get_conduct_system_status(conduct_id)
+
+#         # Check system restrictions
+#         if system_status["cut_off"] and user.role != 'conducting_body':
+#             return jsonify({"error": "System is in cut-off mode"}), 403
+
+#         # Check mandatory rest period
+#         if system_status["cut_off_end_time"]:
+#             cut_off_end = datetime.strptime(system_status["cut_off_end_time"], "%H:%M:%S")
+#             cut_off_end_naive = sg_now().replace(hour=cut_off_end.hour, minute=cut_off_end.minute, second=cut_off_end.second)
+            
+#             # Handle midnight rollover for mandatory rest period
+#             current_time = sg_now()
+#             if cut_off_end.hour < current_time.hour and (current_time.hour - cut_off_end.hour) > 12:
+#                 cut_off_end_naive = cut_off_end_naive + timedelta(days=1)
+#                 print(f"Server: Midnight rollover detected for mandatory rest end time: {system_status['cut_off_end_time']} moved to next day")
+            
+#             if current_time < cut_off_end_naive and user.role != 'conducting_body':
+#                 return jsonify({"error": "Mandatory rest period is still active"}), 403
+
+#         # Find target user
+#         target_user = User.query.filter_by(name=target_user_name, conduct_id=conduct_id).first()
+#         if not target_user:
+#             return jsonify({"error": "Target user not found"}), 404
+
+#         # Permission check
+#         if user.role == 'trainer' and target_user.name != user.name:
+#             return jsonify({"error": "Trainers can only set their own zone"}), 401
+
+#         # Prevent zone changes during rest and pending rest states
+#         if target_user.status == "resting" and user.role != 'conducting_body':
+#             return jsonify({"error": "Cannot start work cycle during rest period"}), 403
+
+#         if (target_user.work_completed and target_user.pending_rest) and user.role != 'conducting_body':
+#             return jsonify({"error": "Must start rest cycle before beginning new work cycle"}), 403
+
+#         # RENDER DEBUG: Log current user state before zone change
+#         print(f"RENDER DEBUG: Target user {target_user.name} current state - status: {target_user.status}, zone: {target_user.zone}, end_time: {target_user.end_time}, work_completed: {target_user.work_completed}")
+        
+#         # RENDER FIX: Force cache invalidation to ensure fresh data for zone operations
+#         invalidate_user_cache(target_user.id)
+
+#         # Set zone and timing with WBGT zone overwrite logic
+#         now = sg_now()
+#         work_duration = WBGT_ZONES.get(zone, {}).get('work', 60)
+#         proposed_end = now + timedelta(minutes=work_duration, seconds=0, microseconds=0)
+#         print(f"RENDER DEBUG: New zone {zone} requested, work duration: {work_duration} minutes, proposed end: {proposed_end.strftime('%H:%M:%S')}")
+        
+#         # WBGT zone overwrite logic - if user is currently working, use stricter (earlier) end time
+#         if target_user.status == 'working' and target_user.end_time and not target_user.work_completed:
+#             print(f"RENDER DEBUG: Zone overwrite triggered for {target_user.name} - current zone: {target_user.zone}, new zone: {zone}")
+#             print(f"RENDER DEBUG: Current end time: {target_user.end_time}, proposed new end would be: {(now + timedelta(minutes=work_duration)).strftime('%H:%M:%S')}")
+            
+#             current_end_str = target_user.end_time
+#             current_end_naive = datetime.strptime(current_end_str, "%H:%M:%S")
+#             current_end = now.replace(hour=current_end_naive.hour, minute=current_end_naive.minute, second=current_end_naive.second)
+            
+#             # Handle midnight rollover: if end time is earlier than start time,
+#             # it means the end time is on the next day
+#             if target_user.start_time:
+#                 start_time_parts = target_user.start_time.split(':')
+#                 start_hour = int(start_time_parts[0])
+#                 end_hour = current_end_naive.hour
+                
+#                 # If end time is significantly earlier than start time, assume next day
+#                 if end_hour < start_hour and (start_hour - end_hour) > 12:
+#                     current_end = current_end + timedelta(days=1)
+#                     print(f"RENDER DEBUG: Midnight rollover detected in zone overwrite for {target_user.name}: {current_end_str} moved to next day")
+            
+#             # Only use the earlier time if the current end time is in the future
+#             if current_end > now:
+#                 proposed_end = min(current_end, proposed_end)
+#                 print(f"RENDER DEBUG: Zone overwrite applied - using earlier time: {proposed_end.strftime('%H:%M:%S')}")
+#             else:
+#                 print(f"RENDER DEBUG: Zone overwrite NOT applied - current end time is in the past: {current_end} vs now: {now}")
+#         else:
+#             print(f"RENDER DEBUG: Zone overwrite NOT triggered for {target_user.name} - status: {target_user.status}, end_time: {target_user.end_time}, work_completed: {target_user.work_completed}")
+
+#         # Strip microseconds for consistent timing across platforms
+#         now = now.replace(microsecond=0)
+#         proposed_end = proposed_end.replace(microsecond=0)
+
+#         # Update user status and track most stringent zone
+#         target_user.status = 'working'
+#         target_user.zone = zone
+#         if not target_user.start_time or target_user.status != 'working':
+#          target_user.start_time = now.strftime('%H:%M:%S')
+#         target_user.end_time = proposed_end.strftime('%H:%M:%S')
+#         target_user.work_completed = False
+#         target_user.pending_rest = False
+#         target_user.remarks = remarks
+        
+#         # Track most stringent zone during work cycle
+#         target_user.most_stringent_zone = get_most_stringent_zone(zone, target_user.most_stringent_zone)
+#         print(f"STRINGENCY DEBUG: User {target_user.name} - Current zone: {zone}, Most stringent: {target_user.most_stringent_zone}")
+        
+#         if hasattr(target_user, 'location'):
+#             target_user.location = location
+
+#         db.session.commit()
+
+#         # Invalidate cache
+#         invalidate_user_cache(target_user.id)
+
+#         # Log activity
+#         log_activity(conduct_id, target_user.name, 'start_work', zone)
+
+#         # Emit updates to conduct room - CRITICAL: This ensures real-time updates
+#         emit_user_update(conduct_id, target_user)
+
+#         return jsonify({
+#             "success": True,
+#             "user": target_user.name,
+#             "zone": zone,
+#             "start_time": target_user.start_time,
+#             "end_time": target_user.end_time
+#         })
+
+#     except Exception as e:
+#         db.session.rollback()
+#         logging.error(f"Error setting zone: {e}")
+#         return jsonify({"error": "Internal server error"}), 500
+
+
 @app.route('/set_zone', methods=['POST'])
 def set_zone():
     """Set WBGT zone for a user"""
@@ -1264,7 +1409,6 @@ def set_zone():
     location = request.form.get('location')
     remarks = request.form.get('remarks')
 
-    # If no target user specified, use current user
     if not target_user_name:
         current_user = User.query.get(user_id)
         if current_user:
@@ -1278,111 +1422,118 @@ def set_zone():
         conduct_id = user.conduct_id
         system_status = get_conduct_system_status(conduct_id)
 
-        # Check system restrictions
+        # --- SYSTEM CHECKS (unchanged) ---
         if system_status["cut_off"] and user.role != 'conducting_body':
             return jsonify({"error": "System is in cut-off mode"}), 403
 
-        # Check mandatory rest period
         if system_status["cut_off_end_time"]:
             cut_off_end = datetime.strptime(system_status["cut_off_end_time"], "%H:%M:%S")
-            cut_off_end_naive = sg_now().replace(hour=cut_off_end.hour, minute=cut_off_end.minute, second=cut_off_end.second)
-            
-            # Handle midnight rollover for mandatory rest period
+            cut_off_end_naive = sg_now().replace(
+                hour=cut_off_end.hour,
+                minute=cut_off_end.minute,
+                second=cut_off_end.second
+            )
+
             current_time = sg_now()
             if cut_off_end.hour < current_time.hour and (current_time.hour - cut_off_end.hour) > 12:
-                cut_off_end_naive = cut_off_end_naive + timedelta(days=1)
-                print(f"Server: Midnight rollover detected for mandatory rest end time: {system_status['cut_off_end_time']} moved to next day")
-            
+                cut_off_end_naive += timedelta(days=1)
+
             if current_time < cut_off_end_naive and user.role != 'conducting_body':
                 return jsonify({"error": "Mandatory rest period is still active"}), 403
 
-        # Find target user
-        target_user = User.query.filter_by(name=target_user_name, conduct_id=conduct_id).first()
+        target_user = User.query.filter_by(
+            name=target_user_name,
+            conduct_id=conduct_id
+        ).first()
+
         if not target_user:
             return jsonify({"error": "Target user not found"}), 404
 
-        # Permission check
         if user.role == 'trainer' and target_user.name != user.name:
             return jsonify({"error": "Trainers can only set their own zone"}), 401
 
-        # Prevent zone changes during rest and pending rest states
         if target_user.status == "resting" and user.role != 'conducting_body':
             return jsonify({"error": "Cannot start work cycle during rest period"}), 403
 
         if (target_user.work_completed and target_user.pending_rest) and user.role != 'conducting_body':
             return jsonify({"error": "Must start rest cycle before beginning new work cycle"}), 403
 
-        # RENDER DEBUG: Log current user state before zone change
-        print(f"RENDER DEBUG: Target user {target_user.name} current state - status: {target_user.status}, zone: {target_user.zone}, end_time: {target_user.end_time}, work_completed: {target_user.work_completed}")
-        
-        # RENDER FIX: Force cache invalidation to ensure fresh data for zone operations
         invalidate_user_cache(target_user.id)
 
-        # Set zone and timing with WBGT zone overwrite logic
-        now = sg_now()
+        now = sg_now().replace(microsecond=0)
         work_duration = WBGT_ZONES.get(zone, {}).get('work', 60)
-        proposed_end = now + timedelta(minutes=work_duration, seconds=0, microseconds=0)
-        print(f"RENDER DEBUG: New zone {zone} requested, work duration: {work_duration} minutes, proposed end: {proposed_end.strftime('%H:%M:%S')}")
 
-        # WBGT zone overwrite logic - if user is currently working, use stricter (earlier) end time
+        # ============================================================
+        # ✅ FIX 1: DETERMINE START TIME (ONLY SET ON FIRST CLICK)
+        # ============================================================
+        if not target_user.start_time or target_user.status != 'working':
+            start_time = now
+            target_user.start_time = start_time.strftime('%H:%M:%S')
+            print(f"DEBUG: New cycle start time set: {target_user.start_time}")
+        else:
+            start_time_naive = datetime.strptime(target_user.start_time, "%H:%M:%S")
+            start_time = now.replace(
+                hour=start_time_naive.hour,
+                minute=start_time_naive.minute,
+                second=start_time_naive.second
+            )
+
+            # Handle midnight rollover
+            if start_time > now:
+                start_time -= timedelta(days=1)
+
+            print(f"DEBUG: Using existing start time: {target_user.start_time}")
+
+        # ============================================================
+        # ✅ FIX 2: CALCULATE END TIME FROM INITIAL START TIME
+        # ============================================================
+        proposed_end = start_time + timedelta(minutes=work_duration)
+
+        print(f"DEBUG: Proposed end (from start time): {proposed_end.strftime('%H:%M:%S')}")
+
+        # ============================================================
+        # ✅ EXISTING STRICTER ZONE LOGIC (ADJUSTED)
+        # ============================================================
         if target_user.status == 'working' and target_user.end_time and not target_user.work_completed:
-            print(f"RENDER DEBUG: Zone overwrite triggered for {target_user.name} - current zone: {target_user.zone}, new zone: {zone}")
-            print(f"RENDER DEBUG: Current end time: {target_user.end_time}, proposed new end would be: {(now + timedelta(minutes=work_duration)).strftime('%H:%M:%S')}")
-            
-            current_end_str = target_user.end_time
-            current_end_naive = datetime.strptime(current_end_str, "%H:%M:%S")
-            current_end = now.replace(hour=current_end_naive.hour, minute=current_end_naive.minute, second=current_end_naive.second)
-            
-            # Handle midnight rollover: if end time is earlier than start time,
-            # it means the end time is on the next day
-            if target_user.start_time:
-                start_time_parts = target_user.start_time.split(':')
-                start_hour = int(start_time_parts[0])
-                end_hour = current_end_naive.hour
-                
-                # If end time is significantly earlier than start time, assume next day
-                if end_hour < start_hour and (start_hour - end_hour) > 12:
-                    current_end = current_end + timedelta(days=1)
-                    print(f"RENDER DEBUG: Midnight rollover detected in zone overwrite for {target_user.name}: {current_end_str} moved to next day")
-            
-            # Only use the earlier time if the current end time is in the future
+            current_end_naive = datetime.strptime(target_user.end_time, "%H:%M:%S")
+            current_end = now.replace(
+                hour=current_end_naive.hour,
+                minute=current_end_naive.minute,
+                second=current_end_naive.second
+            )
+
+            # Midnight rollover handling
+            if current_end < start_time:
+                current_end += timedelta(days=1)
+
             if current_end > now:
                 proposed_end = min(current_end, proposed_end)
-                print(f"RENDER DEBUG: Zone overwrite applied - using earlier time: {proposed_end.strftime('%H:%M:%S')}")
-            else:
-                print(f"RENDER DEBUG: Zone overwrite NOT applied - current end time is in the past: {current_end} vs now: {now}")
-        else:
-            print(f"RENDER DEBUG: Zone overwrite NOT triggered for {target_user.name} - status: {target_user.status}, end_time: {target_user.end_time}, work_completed: {target_user.work_completed}")
+                print(f"DEBUG: Using stricter end time: {proposed_end.strftime('%H:%M:%S')}")
 
-        # Strip microseconds for consistent timing across platforms
-        now = now.replace(microsecond=0)
         proposed_end = proposed_end.replace(microsecond=0)
 
-        # Update user status and track most stringent zone
+        # ============================================================
+        # UPDATE USER
+        # ============================================================
         target_user.status = 'working'
         target_user.zone = zone
-        target_user.start_time = now.strftime('%H:%M:%S')
         target_user.end_time = proposed_end.strftime('%H:%M:%S')
         target_user.work_completed = False
         target_user.pending_rest = False
         target_user.remarks = remarks
-        
-        # Track most stringent zone during work cycle
-        target_user.most_stringent_zone = get_most_stringent_zone(zone, target_user.most_stringent_zone)
-        print(f"STRINGENCY DEBUG: User {target_user.name} - Current zone: {zone}, Most stringent: {target_user.most_stringent_zone}")
-        
+
+        target_user.most_stringent_zone = get_most_stringent_zone(
+            zone,
+            target_user.most_stringent_zone
+        )
+
         if hasattr(target_user, 'location'):
             target_user.location = location
 
         db.session.commit()
 
-        # Invalidate cache
         invalidate_user_cache(target_user.id)
-
-        # Log activity
         log_activity(conduct_id, target_user.name, 'start_work', zone)
-
-        # Emit updates to conduct room - CRITICAL: This ensures real-time updates
         emit_user_update(conduct_id, target_user)
 
         return jsonify({
@@ -1397,7 +1548,8 @@ def set_zone():
         db.session.rollback()
         logging.error(f"Error setting zone: {e}")
         return jsonify({"error": "Internal server error"}), 500
-
+    
+    
 @app.route('/toggle_cut_off', methods=['POST'])
 def toggle_cut_off():
     """Toggle cut-off mode for a conduct"""
